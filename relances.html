@@ -1,0 +1,891 @@
+<title>Relances clients concession</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Semi+Condensed:wght@600;700&family=Roboto+Mono:wght@400;500&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  /* Liste d'appels en cartes, une colonne sur téléphone ; tableau de bord en grille pour le chef des ventes. */
+  :root {
+    --bg: #f2f3f3;
+    --surface: #ffffff;
+    --ink: #17191b;
+    --muted: #5b6066;
+    --line: #dcdfe2;
+    --line-strong: #c2c7cc;
+    --accent: #1d5f8a;
+    --accent-soft: #e3eef5;
+    --accent-ink: #ffffff;
+    --late: #b3261e;
+    --late-bg: #fbe2df;
+    --soon: #8f5a00;
+    --soon-bg: #fbecd2;
+    --good: #22704a;
+    --good-bg: #ddf0e5;
+    --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s5: #e87ba4;
+    --shadow: 0 10px 30px rgba(20, 24, 28, .16);
+    --f-display: "Barlow Semi Condensed", "Arial Narrow", Arial, sans-serif;
+    --f-body: "Barlow", -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    --f-mono: "Roboto Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #111315; --surface: #1a1d20; --ink: #e8eaec; --muted: #9aa1a8; --line: #2a2f34; --line-strong: #3a4148;
+      --accent: #6fb2de; --accent-soft: #1b2c38; --accent-ink: #0f1418;
+      --late: #ff8d84; --late-bg: #3e1d1b; --soon: #f0b65e; --soon-bg: #382a14; --good: #7dd3a3; --good-bg: #173226;
+      --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181;
+      --shadow: 0 10px 30px rgba(0, 0, 0, .5);
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #111315; --surface: #1a1d20; --ink: #e8eaec; --muted: #9aa1a8; --line: #2a2f34; --line-strong: #3a4148;
+    --accent: #6fb2de; --accent-soft: #1b2c38; --accent-ink: #0f1418;
+    --late: #ff8d84; --late-bg: #3e1d1b; --soon: #f0b65e; --soon-bg: #382a14; --good: #7dd3a3; --good-bg: #173226;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181;
+    --shadow: 0 10px 30px rgba(0, 0, 0, .5);
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--bg); color: var(--ink); font: 15px/1.45 var(--f-body); }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .num { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+
+  body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--surface); }
+  header.bar {
+    position: sticky; top: env(safe-area-inset-top, 0px); z-index: 8; background: var(--surface); border-bottom: 1px solid var(--line);
+    padding-block: 10px 0; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  .bar-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+  .brand { font-family: var(--f-display); font-size: 22px; font-weight: 700; margin: 0 auto 0 0; letter-spacing: .2px; text-transform: uppercase; }
+  .brand span { color: var(--accent); }
+  .who { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+  select, input[type=text], input[type=date], input[type=tel], input[type=email], textarea {
+    border: 1px solid var(--line-strong); background: var(--surface); border-radius: 8px; padding: 7px 9px; min-height: 38px; max-width: 100%;
+  }
+  nav.tabs { display: flex; gap: 2px; overflow-x: auto; margin-top: 6px; scrollbar-width: none; }
+  nav.tabs::-webkit-scrollbar { display: none; }
+  nav.tabs button { background: none; border: 0; border-bottom: 3px solid transparent; padding: 9px 12px 8px; color: var(--muted); font-weight: 600; white-space: nowrap; }
+  nav.tabs button.on { color: var(--ink); border-bottom-color: var(--accent); }
+  nav.tabs .n { font-family: var(--f-mono); font-size: 12px; background: var(--accent-soft); color: var(--accent); border-radius: 99px; padding: 1px 7px; margin-left: 4px; }
+  nav.tabs .n.late { background: var(--late-bg); color: var(--late); }
+
+  main { padding-block: 14px 60px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  .col { max-width: 760px; margin: 0 auto; }
+  .view[hidden] { display: none; }
+  .banner { background: var(--accent-soft); border-radius: 8px; padding: 9px 12px; margin-bottom: 12px; font-size: 13.5px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .banner.warn { background: var(--soon-bg); color: var(--soon); }
+  .h2 { font-family: var(--f-display); font-size: 24px; font-weight: 700; margin: 0; text-wrap: balance; }
+  .lead { color: var(--muted); margin: 2px 0 14px; max-width: 70ch; font-size: 14px; }
+  .btn { border: 1px solid var(--line-strong); background: var(--surface); border-radius: 8px; padding: 8px 13px; min-height: 40px; font-weight: 600; white-space: nowrap; }
+  .btn:hover { border-color: var(--accent); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .btn.small { min-height: 32px; padding: 4px 10px; font-size: 13.5px; }
+  .btn.ghost { border-color: transparent; background: none; }
+  .btn.danger { color: var(--late); }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0; }
+  .toolbar .spacer { flex: 1; }
+
+  /* cartes d'appel */
+  .cards { display: grid; gap: 10px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; display: grid; gap: 8px; }
+  .card.late { border-left: 4px solid var(--late); }
+  .card.soon { border-left: 4px solid var(--soon); }
+  .card .top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+  .card .name { font-weight: 700; font-size: 16.5px; background: none; border: 0; padding: 0; text-align: left; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .card .meta { color: var(--muted); font-size: 13.5px; display: flex; flex-wrap: wrap; gap: 4px 10px; }
+  .chip { display: inline-flex; align-items: center; gap: 4px; border-radius: 99px; padding: 2px 9px; font-size: 12.5px; font-weight: 600; background: var(--accent-soft); color: var(--accent); white-space: nowrap; }
+  .chip.late { background: var(--late-bg); color: var(--late); }
+  .chip.soon { background: var(--soon-bg); color: var(--soon); }
+  .chip.good { background: var(--good-bg); color: var(--good); }
+  .chip.grey { background: var(--bg); color: var(--muted); }
+  .tel { font-family: var(--f-mono); font-size: 15px; color: var(--ink); text-decoration: none; border-bottom: 1px dashed var(--line-strong); }
+  .quick { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .quick .btn { padding: 8px 4px; font-size: 14px; }
+  .last { font-size: 13px; color: var(--muted); }
+  .group-title { font-size: 12.5px; text-transform: uppercase; letter-spacing: .7px; color: var(--muted); font-weight: 700; margin: 16px 0 6px; }
+  .empty { text-align: center; color: var(--muted); padding: 40px 16px; background: var(--surface); border: 1px dashed var(--line-strong); border-radius: 12px; }
+
+  /* feuille de saisie */
+  .scrim { position: fixed; inset: 0; background: rgba(10, 12, 14, .45); z-index: 40; }
+  .sheet {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 41; max-width: 640px; margin: 0 auto; background: var(--surface);
+    border-radius: 18px 18px 0 0; box-shadow: var(--shadow); max-height: 92vh; overflow-y: auto;
+    padding-block: 12px calc(18px + env(safe-area-inset-bottom, 0px)); padding-left: max(18px, env(safe-area-inset-left, 0px)); padding-right: max(18px, env(safe-area-inset-right, 0px));
+  }
+  .grab { width: 40px; height: 5px; border-radius: 3px; background: var(--line-strong); margin: 0 auto 10px; }
+  .sheet h3 { font-family: var(--f-display); font-size: 22px; margin: 0; }
+  .sheet .sub { color: var(--muted); font-size: 13.5px; margin: 0 0 12px; }
+  .step-label { font-size: 12.5px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); font-weight: 700; margin: 12px 0 6px; }
+  .choices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .choices.two { grid-template-columns: repeat(2, 1fr); }
+  .choice { border: 1px solid var(--line-strong); background: var(--surface); border-radius: 10px; padding: 12px 8px; font-weight: 600; min-height: 52px; }
+  .choice.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+  .choice.stop { color: var(--late); }
+  .field { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+  .field input, .field select, .field textarea { color: var(--ink); font-size: 15px; width: 100%; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .sheet .foot { display: flex; gap: 8px; margin-top: 14px; }
+  .sheet .foot .btn { flex: 1; min-height: 46px; }
+  .hist { display: grid; gap: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .hist div { display: grid; grid-template-columns: 92px 1fr; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--line); font-size: 13.5px; }
+  .hist div:last-child { border-bottom: 0; }
+  .hist .d { font-family: var(--f-mono); font-size: 12.5px; color: var(--muted); }
+  .hist .c { color: var(--muted); display: block; }
+
+  /* tableau de bord */
+  .wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+  table.t { border-collapse: collapse; width: 100%; font-size: 14px; }
+  .t th, .t td { padding: 9px 12px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+  .t th:first-child, .t td:first-child { text-align: left; }
+  .t th { font-size: 12.5px; color: var(--muted); font-weight: 600; }
+  .t td { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+  .t td:first-child { font-family: var(--f-body); font-weight: 600; }
+  .t tfoot td { background: var(--accent-soft); font-weight: 600; }
+  .t tr:last-child td { border-bottom: 0; }
+  .t tr.click { cursor: pointer; }
+  .t tr.click:hover td { background: var(--accent-soft); }
+  .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 7px; vertical-align: 0; }
+  .grid2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; margin-top: 14px; }
+  @media (max-width: 860px) { .grid2 { grid-template-columns: minmax(0, 1fr); } }
+  .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px; min-width: 0; }
+  .panel h3 { margin: 0 0 2px; font-size: 16px; }
+  .panel .lead { margin-bottom: 10px; }
+  .rank { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+  .rank li { display: grid; grid-template-columns: 28px 1fr auto; gap: 10px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line); }
+  .rank li:last-child { border-bottom: 0; }
+  .rank .pos { font-family: var(--f-display); font-size: 20px; font-weight: 700; color: var(--muted); text-align: center; }
+  .rank li:first-child .pos { color: var(--accent); }
+  .rank small { display: block; color: var(--muted); font-size: 12.5px; }
+  .rank b.num { font-size: 16px; }
+  .seg { display: inline-flex; border: 1px solid var(--line-strong); border-radius: 8px; overflow: hidden; }
+  .seg button { border: 0; background: var(--surface); padding: 6px 12px; min-height: 36px; font-weight: 600; color: var(--muted); }
+  .seg button.on { background: var(--accent); color: var(--accent-ink); }
+  .period { display: inline-flex; align-items: center; gap: 4px; }
+  .period b { min-width: 170px; text-align: center; font-weight: 600; }
+  .chart { position: relative; }
+  .chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+  .chart .axis text { fill: var(--muted); font: 11px var(--f-mono); }
+  .chart .grid line { stroke: var(--line); stroke-width: 1; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; margin-top: 8px; }
+  .tip { position: absolute; pointer-events: none; background: var(--surface); border: 1px solid var(--line-strong); border-radius: 8px; box-shadow: var(--shadow); padding: 8px 10px; font-size: 12.5px; min-width: 160px; z-index: 3; }
+  .tip b { display: block; margin-bottom: 4px; }
+  .tip div { display: flex; justify-content: space-between; gap: 12px; }
+  .tip span.num { font-weight: 500; }
+
+  .modal-wrap { position: fixed; inset: 0; z-index: 50; background: rgba(10, 12, 14, .45); display: flex; align-items: flex-start; justify-content: center; overflow-y: auto; padding: 6vh 16px; }
+  .modal { background: var(--surface); border-radius: 14px; box-shadow: var(--shadow); width: 560px; max-width: 100%; padding: 18px 20px; }
+  .modal h2 { font-family: var(--f-display); font-size: 22px; margin: 0 0 8px; }
+  .modal .foot { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; flex-wrap: wrap; }
+  .tests { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+  .tests li { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 14px; }
+  .tests .ok b { color: var(--good); } .tests .ko b { color: var(--late); }
+  .tests small { display: block; color: var(--muted); }
+  .err { color: var(--late); font-size: 13px; min-height: 1em; margin: 6px 0 0; }
+  .toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 10px 14px; border-radius: 10px; z-index: 60; max-width: calc(100vw - 32px); font-size: 14px; display: flex; gap: 12px; align-items: center; }
+  .toast button { background: none; border: 0; color: var(--bg); font-weight: 700; text-decoration: underline; padding: 4px; }
+  @media (max-width: 520px) { .row2 { grid-template-columns: 1fr; } .brand { font-size: 19px; } .period b { min-width: 0; } }
+</style>
+
+<header class="bar">
+  <div class="bar-top">
+    <h1 class="brand">Relances <span>clients</span></h1>
+    <label class="who">Je suis <select id="me" aria-label="Utilisateur"></select></label>
+  </div>
+  <nav class="tabs" id="tabs"></nav>
+</header>
+
+<main>
+  <div id="banner"></div>
+  <section class="view col" id="v-jour"></section>
+  <section class="view col" id="v-autrement" hidden></section>
+  <section class="view col" id="v-clients" hidden></section>
+  <section class="view" id="v-bord" hidden></section>
+</main>
+<div id="layer"></div>
+<input type="file" id="file-import" accept=".xlsx,.xls,.csv" hidden>
+
+<script>
+/* ==========================================================================
+   Règles de relance et calculs (fonctions pures, contrôlées dans « Vérifications »)
+   ========================================================================== */
+const MOTIFS = [
+  { id: 'essai', label: 'Suite à un essai' }, { id: 'devis', label: 'Devis en attente' },
+  { id: 'loa', label: 'Fin de leasing / LOA' }, { id: 'anniv', label: "Anniversaire d'achat" },
+  { id: 'commande', label: 'Véhicule en commande' }, { id: 'satisf', label: 'Satisfaction après livraison' },
+];
+const RESULTS = { nr: 'Pas de réponse', msg: 'Message laissé', joint: 'Joint' };
+const ISSUES = { rdv: 'RDV pris', essai: 'Essai planifié', devis: 'Devis à envoyer', pasint: 'Pas intéressé pour l’instant', stop: 'Ne plus appeler' };
+const MONTHS = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
+const MONTHS_LONG = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+
+const Rules = (() => {
+  const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const parse = s => { const [y, m, d] = s.slice(0, 10).split('-').map(Number); return new Date(y, m - 1, d); };
+  const addDays = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+  function easter(y) {
+    const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25);
+    const g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4;
+    const l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
+    return new Date(y, Math.floor((h + l - 7 * m + 114) / 31) - 1, ((h + l - 7 * m + 114) % 31) + 1);
+  }
+  const hol = {};
+  function holidays(y) {
+    if (hol[y]) return hol[y];
+    const e = easter(y);
+    return (hol[y] = new Set([new Date(y, 0, 1), addDays(e, 1), new Date(y, 4, 1), new Date(y, 4, 8), addDays(e, 39), addDays(e, 50),
+      new Date(y, 6, 14), new Date(y, 7, 15), new Date(y, 10, 1), new Date(y, 10, 11), new Date(y, 11, 25)].map(ymd)));
+  }
+  const isBusiness = d => d.getDay() !== 0 && d.getDay() !== 6 && !holidays(d.getFullYear()).has(ymd(d));
+  function addBusinessDays(d, n) { let x = d; while (n > 0) { x = addDays(x, 1); if (isBusiness(x)) n--; } return x; }
+  const nextBusiness = d => { let x = d; while (!isBusiness(x)) x = addDays(x, 1); return x; };
+  const addMonths = (d, n) => nextBusiness(new Date(d.getFullYear(), d.getMonth() + n, Math.min(d.getDate(), 28)));
+
+  /** Date de la relance suivante selon le résultat. null = plus de relance. */
+  function nextDate(call, callDay) {
+    const d = parse(callDay);
+    if (call.r === 'nr') return ymd(addBusinessDays(d, 2));
+    if (call.r === 'msg') return ymd(addBusinessDays(d, 3));
+    switch (call.i) {
+      case 'rdv': case 'essai': return ymd(addBusinessDays(call.rdv ? parse(call.rdv) : d, 1));   // on rappelle le lendemain du RDV ou de l'essai
+      case 'devis': return ymd(addBusinessDays(d, 2));
+      case 'pasint': return ymd(addMonths(d, 3));
+      case 'stop': return null;
+    }
+    return ymd(addBusinessDays(d, 2));
+  }
+
+  /** Applique un appel à une fiche client et renvoie la fiche mise à jour. */
+  function applyCall(client, call, manualNext) {
+    const c = JSON.parse(JSON.stringify(client));
+    const day = call.d.slice(0, 10);
+    c.appels = [...(c.appels || []), call];
+    c.dernierContact = day;
+    c.nrStreak = call.r === 'nr' ? (c.nrStreak || 0) + 1 : 0;
+    if (call.r === 'joint' && call.i === 'essai') c.motif = 'essai';
+    if (call.r === 'joint' && call.i === 'devis') c.motif = 'devis';
+    if (call.i === 'stop') { c.statut = 'stop'; c.prochaine = null; return c; }
+    if (c.nrStreak >= 3) { c.statut = 'autrement'; c.prochaine = null; return c; }
+    c.statut = 'actif';
+    c.prochaine = manualNext || nextDate(call, day);
+    return c;
+  }
+
+  const daysBetween = (a, b) => Math.round((parse(b) - parse(a)) / 864e5);
+
+  /** Appels du jour d'un utilisateur, triés par priorité. viewer = id commercial ou 'chef'. */
+  function dueList(clients, today, viewer) {
+    const out = [];
+    for (const c of clients) {
+      if (c.statut !== 'actif' || !c.prochaine || c.prochaine > today) continue;
+      if (viewer !== 'chef' && c.commercial !== viewer) continue;
+      const late = c.prochaine < today ? daysBetween(c.prochaine, today) : 0;
+      const contrat = c.motif === 'loa' && c.finContrat ? daysBetween(today, c.finContrat) : null;
+      const soon = contrat !== null && contrat <= 60;
+      out.push({ c, late, contrat, soon, prio: late > 0 ? 0 : soon ? 1 : 2 });
+    }
+    return out.sort((a, b) => a.prio - b.prio || (a.prio === 0 ? b.late - a.late : a.prio === 1 ? a.contrat - b.contrat : a.c.nom.localeCompare(b.c.nom, 'fr')));
+  }
+
+  /** Indicateurs d'une liste d'appels. */
+  function stats(calls) {
+    const appels = calls.length, joints = calls.filter(x => x.r === 'joint').length;
+    const rdv = calls.filter(x => x.i === 'rdv').length, essais = calls.filter(x => x.i === 'essai').length;
+    return { appels, joints, rdv, essais, joign: appels ? joints / appels : null, transfo: joints ? rdv / joints : null };
+  }
+  const pct = v => v === null ? '—' : Math.round(v * 100) + ' %';
+
+  return { ymd, parse, addDays, addBusinessDays, isBusiness, nextDate, applyCall, dueList, stats, pct, daysBetween };
+})();
+
+/* ==========================================================================
+   Stockage partagé (db de l'artefact) avec repli local
+   ========================================================================== */
+const COLLS = ['commerciaux', 'clients'];
+const Store = {
+  mode: 'loading', db: null, canWrite: true, error: null,
+  data: { commerciaux: new Map(), clients: new Map() }, loaded: new Set(),
+  async init(onChange) {
+    this.onChange = onChange;
+    let db = null;
+    try { db = window.claude && window.claude.use ? await window.claude.use('db') : null; } catch (e) { db = null; }
+    if (db) {
+      this.mode = 'shared'; this.db = db;
+      try { const u = await window.claude.use('user'); if (u && (await u.can('data.write')) === false) this.canWrite = false; } catch (e) {}
+      for (const c of COLLS) db.collection(c).limit(1000).onSnapshot(snap => {
+        const m = new Map(); snap.docs.forEach(d => m.set(d.id, d.data())); this.data[c] = m; this.loaded.add(c); this.onChange();
+      }, err => { this.error = err; this.onChange(); });
+    } else {
+      this.mode = 'local';
+      try { const raw = JSON.parse(localStorage.getItem('relances.local') || '{}'); for (const c of COLLS) this.data[c] = new Map(Object.entries(raw[c] || {})); } catch (e) {}
+      COLLS.forEach(c => this.loaded.add(c)); this.onChange();
+    }
+  },
+  persist() { const o = {}; for (const c of COLLS) o[c] = Object.fromEntries(this.data[c]); try { localStorage.setItem('relances.local', JSON.stringify(o)); } catch (e) {} this.onChange(); },
+  async set(c, id, body) {
+    if (this.mode === 'shared') return this.db.collection(c).doc(id).set(body);
+    this.data[c] = new Map(this.data[c]).set(id, JSON.parse(JSON.stringify(body))); this.persist();
+  },
+  async del(c, id) {
+    if (this.mode === 'shared') return this.db.collection(c).doc(id).delete();
+    const m = new Map(this.data[c]); m.delete(id); this.data[c] = m; this.persist();
+  },
+};
+
+/* ==========================================================================
+   État de l'interface
+   ========================================================================== */
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const fr = s => s ? s.slice(0, 10).split('-').reverse().join('/') : '—';
+const lsGet = (k, d) => { try { const x = localStorage.getItem(k); return x === null ? d : x; } catch (e) { return d; } };
+const lsSet = (k, x) => { try { localStorage.setItem(k, x); } catch (e) {} };
+const ssGet = k => { try { return sessionStorage.getItem(k); } catch (e) { return null; } };
+const ssSet = (k, x) => { try { x === null ? sessionStorage.removeItem(k) : sessionStorage.setItem(k, x); } catch (e) {} };
+
+const UI = {
+  me: lsGet('relances.me', ''), tab: lsGet('relances.tab', 'jour'),
+  simDay: ssGet('relances.today'),
+  q: '', fCom: '', period: lsGet('relances.period', 'semaine'), anchor: null, metric: 'rdv',
+};
+const today = () => UI.simDay || Rules.ymd(new Date());
+const isChef = () => UI.me === 'chef';
+const commerciaux = () => [...Store.data.commerciaux.entries()].map(([id, c]) => ({ id, ...c })).sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
+const comName = id => id === 'chef' ? 'Chef des ventes' : (Store.data.commerciaux.get(id) || {}).nom || '—';
+const comColor = id => { const i = commerciaux().findIndex(c => c.id === id); return i >= 0 && i < 5 ? `var(--s${i + 1})` : 'var(--muted)'; };
+const clients = () => [...Store.data.clients.entries()].map(([id, c]) => ({ id, ...c }));
+const visibleClients = () => isChef() ? clients() : clients().filter(c => c.commercial === UI.me);
+const motifLabel = id => (MOTIFS.find(m => m.id === id) || {}).label || 'Motif à choisir';
+
+/* ==========================================================================
+   Rendu
+   ========================================================================== */
+function render() {
+  if (Store.mode === 'loading') return;
+  const cs = commerciaux();
+  $('#me').innerHTML = `<option value="">Choisir…</option>` + cs.map(c => `<option value="${c.id}" ${c.id === UI.me ? 'selected' : ''}>${esc(c.nom)}</option>`).join('') +
+    `<option value="chef" ${UI.me === 'chef' ? 'selected' : ''}>Chef des ventes (tout le monde)</option>`;
+  if (!isChef() && UI.tab === 'bord') UI.tab = 'jour';
+  const due = UI.me ? Rules.dueList(visibleClients(), today(), UI.me) : [];
+  const lateN = due.filter(x => x.late).length;
+  const autrementN = visibleClients().filter(c => c.statut === 'autrement').length;
+  $('#tabs').innerHTML = [
+    ['jour', `Mes appels du jour<span class="n ${lateN ? 'late' : ''}">${due.length}</span>`],
+    ['autrement', `À contacter autrement${autrementN ? `<span class="n">${autrementN}</span>` : ''}`],
+    ['clients', 'Clients'],
+    ...(isChef() ? [['bord', 'Tableau de bord']] : []),
+  ].map(([id, l]) => `<button data-tab="${id}" class="${UI.tab === id ? 'on' : ''}">${l}</button>`).join('');
+  for (const v of ['jour', 'autrement', 'clients', 'bord']) $('#v-' + v).hidden = v !== UI.tab;
+
+  let b = '';
+  if (Store.mode === 'local') b += `<div class="banner warn">Mode local : les données restent dans ce navigateur. Ouvrez l'appli depuis son lien claude.ai pour travailler à plusieurs.</div>`;
+  if (UI.simDay) b += `<div class="banner warn">Date simulée : ${fr(UI.simDay)}. Les appels notés seront datés de ce jour. <button class="btn small" data-act="sim-off">Revenir à aujourd'hui</button></div>`;
+  if (!Store.canWrite) b += `<div class="banner">Lecture seule : votre accès ne permet pas de noter des appels.</div>`;
+  if (Store.error) b += `<div class="banner warn">La synchronisation est interrompue. Rechargez la page.</div>`;
+  $('#banner').innerHTML = b;
+
+  if (!UI.me) {
+    $('#v-jour').innerHTML = `<div class="empty"><h2 class="h2">Qui êtes-vous ?</h2><p class="lead">Choisissez votre nom en haut de l'écran. Chaque commercial voit ses clients ; le chef des ventes voit tout le monde.</p>
+      <div class="toolbar" style="justify-content:center">${cs.map(c => `<button class="btn" data-act="pick-me" data-id="${c.id}">${esc(c.nom)}</button>`).join('')}<button class="btn primary" data-act="pick-me" data-id="chef">Chef des ventes</button></div></div>`;
+    UI.tab = 'jour'; $('#v-jour').hidden = false;
+    return;
+  }
+  if (UI.tab === 'jour') renderJour(due);
+  if (UI.tab === 'autrement') renderAutrement();
+  if (UI.tab === 'clients') renderClients();
+  if (UI.tab === 'bord') renderBord();
+}
+
+function cardHTML(x) {
+  const c = x.c, last = (c.appels || []).slice(-1)[0];
+  const tag = x.late ? `<span class="chip late">En retard · ${x.late} j</span>`
+    : x.soon ? `<span class="chip soon">Fin de contrat ${x.contrat < 0 ? 'dépassée' : 'dans ' + x.contrat + ' j'}</span>` : `<span class="chip grey">Prévu aujourd'hui</span>`;
+  return `<article class="card ${x.late ? 'late' : x.soon ? 'soon' : ''}">
+    <div class="top"><button class="name" data-act="open" data-id="${c.id}">${esc(c.nom)}</button>${tag}</div>
+    <div class="meta"><span class="chip">${esc(motifLabel(c.motif))}</span><span>${esc(c.vehicule || '')}</span>${isChef() ? `<span>· ${esc(comName(c.commercial))}</span>` : ''}</div>
+    <div class="meta"><a class="tel" href="tel:${esc((c.tel || '').replace(/\s/g, ''))}">${esc(c.tel || 'pas de numéro')}</a>
+      ${c.nrStreak ? `<span class="chip grey">${c.nrStreak} sans réponse</span>` : ''}</div>
+    ${last ? `<div class="last">Dernier appel le ${fr(last.d)} : ${esc(RESULTS[last.r])}${last.i ? ' · ' + esc(ISSUES[last.i]) : ''}${last.c ? ' · « ' + esc(last.c) + ' »' : ''}</div>` : ''}
+    <div class="quick">
+      <button class="btn" data-act="quick" data-r="nr" data-id="${c.id}">Pas de réponse</button>
+      <button class="btn" data-act="quick" data-r="msg" data-id="${c.id}">Message laissé</button>
+      <button class="btn primary" data-act="note" data-id="${c.id}" data-r="joint">Joint…</button>
+    </div>
+  </article>`;
+}
+
+function renderJour(due) {
+  const t = today();
+  const tomorrow = Rules.ymd(Rules.addBusinessDays(Rules.parse(t), 1));
+  const nextN = visibleClients().filter(c => c.statut === 'actif' && c.prochaine > t && c.prochaine <= tomorrow).length;
+  const dayLabel = Rules.parse(t).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+  let h = `<h2 class="h2">${isChef() ? 'Appels du jour, toute l’équipe' : 'Mes appels du jour'}</h2>
+    <p class="lead">${dayLabel} · ${due.length} client${due.length > 1 ? 's' : ''} à rappeler${nextN ? ` · ${nextN} prévu${nextN > 1 ? 's' : ''} le prochain jour ouvré` : ''}.</p>`;
+  if (!due.length) h += `<div class="empty">Aucun appel prévu aujourd'hui. Les prochaines relances apparaîtront ici le jour venu.</div>`;
+  const groups = [[0, 'En retard'], [1, 'Fins de contrat proches'], [2, 'À rappeler aujourd’hui']];
+  for (const [p, label] of groups) {
+    const g = due.filter(x => x.prio === p);
+    if (g.length) h += `<div class="group-title">${label} · ${g.length}</div><div class="cards">${g.map(cardHTML).join('')}</div>`;
+  }
+  $('#v-jour').innerHTML = h;
+}
+
+function renderAutrement() {
+  const list = visibleClients().filter(c => c.statut === 'autrement').sort((a, b) => (b.dernierContact || '').localeCompare(a.dernierContact || ''));
+  $('#v-autrement').innerHTML = `<h2 class="h2">À contacter autrement</h2>
+    <p class="lead">Ces clients n'ont pas répondu 3 fois de suite. Écrivez-leur par e-mail ou SMS depuis votre messagerie, puis remettez-les dans les appels.</p>
+    ${list.length ? `<div class="cards">${list.map(c => `<article class="card">
+      <div class="top"><button class="name" data-act="open" data-id="${c.id}">${esc(c.nom)}</button><span class="chip grey">3 sans réponse</span></div>
+      <div class="meta"><span class="chip">${esc(motifLabel(c.motif))}</span>${isChef() ? `<span>${esc(comName(c.commercial))}</span>` : ''}<span>Dernier essai le ${fr(c.dernierContact)}</span></div>
+      <div class="meta"><span class="num">${esc(c.tel || '')}</span><span>${esc(c.email || 'pas d’e-mail')}</span></div>
+      <div class="toolbar" style="margin:0">
+        ${c.email ? `<button class="btn small" data-act="copy" data-v="${esc(c.email)}">Copier l'e-mail</button>` : ''}
+        ${c.tel ? `<button class="btn small" data-act="copy" data-v="${esc(c.tel)}">Copier le numéro</button>` : ''}
+        <span class="spacer"></span>
+        <button class="btn small primary" data-act="back" data-id="${c.id}">Remettre dans les appels</button>
+        <button class="btn small danger" data-act="stop" data-id="${c.id}">Ne plus appeler</button>
+      </div></article>`).join('')}</div>` : `<div class="empty">Personne pour l'instant.</div>`}`;
+}
+
+function renderClients() {
+  const q = UI.q.toLowerCase();
+  let list = visibleClients();
+  if (isChef() && UI.fCom) list = list.filter(c => c.commercial === UI.fCom);
+  if (q) list = list.filter(c => [c.nom, c.tel, c.email, c.vehicule].join(' ').toLowerCase().includes(q));
+  list.sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
+  const st = c => c.statut === 'stop' ? '<span class="chip late">Ne plus appeler</span>' : c.statut === 'autrement' ? '<span class="chip grey">À contacter autrement</span>'
+    : c.prochaine && c.prochaine < today() ? `<span class="chip late">En retard depuis le ${fr(c.prochaine)}</span>` : `<span class="chip good">Relance le ${fr(c.prochaine)}</span>`;
+  $('#v-clients').innerHTML = `<h2 class="h2">${isChef() ? 'Tous les clients' : 'Mes clients'}</h2>
+    <div class="toolbar"><input type="text" id="q" placeholder="Nom, téléphone, véhicule…" value="${esc(UI.q)}" aria-label="Rechercher" style="flex:1;min-width:180px">
+      ${isChef() ? `<select id="f-com" aria-label="Commercial"><option value="">Tous les commerciaux</option>${commerciaux().map(c => `<option value="${c.id}" ${UI.fCom === c.id ? 'selected' : ''}>${esc(c.nom)}</option>`).join('')}</select>` : ''}
+      <button class="btn primary" data-act="new">Ajouter</button><label class="btn" for="file-import">Importer Excel</label></div>
+    <p class="lead">${list.length} client${list.length > 1 ? 's' : ''}. Colonnes lues à l'import : nom, téléphone, e-mail, véhicule, date du dernier contact, commercial, motif.</p>
+    <div class="wrap"><table class="t"><thead><tr><th>Client</th><th style="text-align:left">Motif</th><th style="text-align:left">Statut</th>${isChef() ? '<th style="text-align:left">Commercial</th>' : ''}<th>Appels</th></tr></thead>
+    <tbody>${list.map(c => `<tr class="click" data-act="open" data-id="${c.id}"><td>${esc(c.nom)}<br><small class="num" style="color:var(--muted);font-weight:400">${esc(c.tel || '')}</small></td>
+      <td style="text-align:left;font-family:var(--f-body)">${esc(motifLabel(c.motif))}</td><td style="text-align:left;font-family:var(--f-body)">${st(c)}</td>
+      ${isChef() ? `<td style="text-align:left;font-family:var(--f-body)">${esc(comName(c.commercial))}</td>` : ''}<td>${(c.appels || []).length}</td></tr>`).join('')}</tbody></table></div>`;
+}
+
+/* ---------- tableau de bord ---------- */
+function periodRange() {
+  const t = Rules.parse(UI.anchor || today());
+  if (UI.period === 'semaine') {
+    const start = Rules.addDays(t, -((t.getDay() + 6) % 7)), end = Rules.addDays(start, 6);
+    return { start: Rules.ymd(start), end: Rules.ymd(end), label: `Semaine du ${start.getDate()} ${MONTHS[start.getMonth()]} au ${end.getDate()} ${MONTHS[end.getMonth()]} ${end.getFullYear()}` };
+  }
+  const start = new Date(t.getFullYear(), t.getMonth(), 1), end = new Date(t.getFullYear(), t.getMonth() + 1, 0);
+  return { start: Rules.ymd(start), end: Rules.ymd(end), label: `${MONTHS_LONG[t.getMonth()]} ${t.getFullYear()}` };
+}
+const allCalls = () => { const out = []; for (const c of clients()) for (const a of c.appels || []) out.push({ ...a, client: c }); return out; };
+
+/** Lignes du tableau de bord : la même fonction sert l'écran et l'export. */
+function dashboard(range) {
+  const calls = allCalls().filter(a => a.d.slice(0, 10) >= range.start && a.d.slice(0, 10) <= range.end);
+  const t = today();
+  const rows = commerciaux().map(com => {
+    const s = Rules.stats(calls.filter(a => a.by === com.id));
+    const retard = clients().filter(c => c.commercial === com.id && c.statut === 'actif' && c.prochaine && c.prochaine < t).length;
+    return { com, ...s, retard };
+  });
+  const ids = new Set(rows.map(r => r.com.id));
+  const tot = Rules.stats(calls.filter(a => ids.has(a.by)));
+  tot.retard = rows.reduce((s, r) => s + r.retard, 0);
+  return { rows, tot, calls };
+}
+function weekRanking() {
+  const t = Rules.parse(today()), start = Rules.addDays(t, -((t.getDay() + 6) % 7));
+  const r = { start: Rules.ymd(start), end: Rules.ymd(Rules.addDays(start, 6)) };
+  return dashboard(r).rows.map(x => ({ ...x, score: x.rdv + x.essais })).sort((a, b) => b.score - a.score || (b.joign || 0) - (a.joign || 0) || b.appels - a.appels);
+}
+function monthly(metric) {
+  const calls = allCalls(), keys = new Set();
+  calls.forEach(a => keys.add(a.d.slice(0, 7)));
+  const months = [...keys].sort().slice(-6);
+  const series = commerciaux().map(com => ({ com, values: months.map(mk => {
+    const s = Rules.stats(calls.filter(a => a.by === com.id && a.d.startsWith(mk)));
+    return metric === 'appels' ? s.appels : metric === 'joign' ? (s.joign === null ? null : Math.round(s.joign * 100)) : s.rdv + s.essais;
+  }) }));
+  return { months, series };
+}
+
+function renderBord() {
+  const range = periodRange(), D = dashboard(range);
+  const row = (label, s, dot) => `<td>${dot ? `<span class="dot" style="background:${dot}"></span>` : ''}${esc(label)}</td>
+    <td data-k="appels">${s.appels}</td><td data-k="joints">${s.joints}</td><td data-k="joign">${Rules.pct(s.joign)}</td>
+    <td data-k="rdv">${s.rdv}</td><td data-k="essais">${s.essais}</td><td data-k="transfo">${Rules.pct(s.transfo)}</td><td data-k="retard">${s.retard}</td>`;
+  const rank = weekRanking();
+  $('#v-bord').innerHTML = `
+    <div class="toolbar" style="margin-top:0"><h2 class="h2" style="margin-right:auto">Tableau de bord</h2>
+      <div class="seg" role="group" aria-label="Période"><button data-act="period" data-v="semaine" class="${UI.period === 'semaine' ? 'on' : ''}">Semaine</button><button data-act="period" data-v="mois" class="${UI.period === 'mois' ? 'on' : ''}">Mois</button></div>
+      <span class="period"><button class="btn small" data-act="shift" data-v="-1" aria-label="Période précédente">‹</button><b>${esc(range.label)}</b><button class="btn small" data-act="shift" data-v="1" aria-label="Période suivante">›</button></span>
+      <button class="btn" id="btn-export">Exporter en Excel</button></div>
+    <div class="wrap"><table class="t" id="dash"><thead><tr><th>Commercial</th><th>Appels</th><th>Joints</th><th>Joignabilité</th><th>RDV</th><th>Essais</th><th>Transformation</th><th>Relances en retard</th></tr></thead>
+      <tbody>${D.rows.map(r => `<tr class="click" data-act="see-com" data-id="${r.com.id}">${row(r.com.nom, r, comColor(r.com.id))}</tr>`).join('')}</tbody>
+      <tfoot><tr>${row('Équipe', D.tot)}</tr></tfoot></table></div>
+    <p class="lead" style="margin-top:8px">Joignabilité = joints ÷ appels. Transformation = RDV ÷ joints. Relances en retard : situation au ${fr(today())}, quelle que soit la période.</p>
+    <div class="grid2">
+      <div class="panel"><h3>Classement de la semaine</h3><p class="lead">RDV + essais obtenus depuis lundi, puis joignabilité.</p>
+        <ol class="rank">${rank.map((r, i) => `<li><span class="pos">${i + 1}</span><span><span class="dot" style="background:${comColor(r.com.id)}"></span>${esc(r.com.nom)}<small>${r.appels} appels · joignabilité ${Rules.pct(r.joign)}</small></span><b class="num">${r.score}</b></li>`).join('')}</ol></div>
+      <div class="panel"><div class="toolbar" style="margin:0 0 6px"><h3 style="margin-right:auto">Évolution par mois</h3>
+        <div class="seg" role="group" aria-label="Indicateur">${[['rdv', 'RDV + essais'], ['appels', 'Appels'], ['joign', 'Joignabilité']].map(([k, l]) => `<button data-act="metric" data-v="${k}" class="${UI.metric === k ? 'on' : ''}">${l}</button>`).join('')}</div></div>
+        <div class="chart" id="chart"></div></div>
+    </div>`;
+  $('#btn-export').onclick = exportExcel;
+  drawChart();
+}
+
+function drawChart() {
+  const el = $('#chart'); if (!el) return;
+  const { months, series } = monthly(UI.metric);
+  if (!months.length) { el.innerHTML = '<p class="lead">Pas encore d’appels.</p>'; return; }
+  const W = 520, H = 230, L = 40, R = 16, T = 12, B = 28;
+  const vals = series.flatMap(s => s.values).filter(v => v !== null);
+  const maxV = UI.metric === 'joign' ? 100 : Math.max(5, ...vals);
+  const step = maxV <= 10 ? 2 : maxV <= 50 ? 10 : maxV <= 100 ? 20 : Math.ceil(maxV / 5 / 50) * 50;
+  const top = Math.ceil(maxV / step) * step;
+  const x = i => months.length === 1 ? (L + W - R) / 2 : L + (W - L - R) * i / (months.length - 1);
+  const y = v => T + (H - T - B) * (1 - v / top);
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Évolution mensuelle par commercial">`;
+  s += `<g class="grid">`; for (let v = 0; v <= top; v += step) s += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}"/>`; s += `</g>`;
+  s += `<g class="axis">`; for (let v = 0; v <= top; v += step) s += `<text x="${L - 6}" y="${y(v) + 4}" text-anchor="end">${v}${UI.metric === 'joign' ? '%' : ''}</text>`;
+  months.forEach((m, i) => { const [yy, mm] = m.split('-').map(Number); s += `<text x="${x(i)}" y="${H - 8}" text-anchor="middle">${MONTHS[mm - 1]} ${String(yy).slice(2)}</text>`; });
+  s += `</g>`;
+  series.forEach(se => {
+    const pts = se.values.map((v, i) => v === null ? null : [x(i), y(v)]).filter(Boolean);
+    const col = comColor(se.com.id);
+    if (pts.length > 1) s += `<polyline points="${pts.map(p => p.join(',')).join(' ')}" fill="none" stroke="${col}" stroke-width="2" stroke-linejoin="round"/>`;
+    pts.forEach(p => { s += `<circle cx="${p[0]}" cy="${p[1]}" r="4.5" fill="${col}" stroke="var(--surface)" stroke-width="2"/>`; });
+  });
+  months.forEach((m, i) => { const w = months.length === 1 ? W - L - R : (W - L - R) / (months.length - 1); s += `<rect data-i="${i}" x="${x(i) - w / 2}" y="${T}" width="${w}" height="${H - T - B}" fill="transparent"/>`; });
+  s += `</svg>`;
+  el.innerHTML = s + `<div class="legend">${series.map(se => `<span><span class="dot" style="background:${comColor(se.com.id)}"></span>${esc(se.com.nom)}</span>`).join('')}</div>`;
+  const svg = el.querySelector('svg');
+  const show = i => {
+    let tip = el.querySelector('.tip'); if (!tip) { tip = document.createElement('div'); tip.className = 'tip'; el.appendChild(tip); }
+    const [yy, mm] = months[i].split('-').map(Number);
+    tip.innerHTML = `<b>${MONTHS_LONG[mm - 1]} ${yy}</b>` + series.map(se => `<div><span><span class="dot" style="background:${comColor(se.com.id)}"></span>${esc(se.com.nom)}</span><span class="num">${se.values[i] === null ? '—' : se.values[i] + (UI.metric === 'joign' ? ' %' : '')}</span></div>`).join('');
+    const r = svg.getBoundingClientRect(), px = x(i) / W * r.width;
+    tip.style.left = Math.min(Math.max(0, px - 90), r.width - 190) + 'px'; tip.style.top = '0px';
+  };
+  svg.querySelectorAll('rect[data-i]').forEach(r => { r.addEventListener('mouseenter', () => show(+r.dataset.i)); r.addEventListener('click', () => show(+r.dataset.i)); });
+  svg.addEventListener('mouseleave', () => { const t = el.querySelector('.tip'); if (t) t.remove(); });
+}
+
+/* ---------- feuille client / saisie d'appel ---------- */
+const Sheet = {
+  open: null,
+  show(s) { this.open = s; this.render(); },
+  close() { this.open = null; $('#layer').innerHTML = ''; },
+  render() {
+    const s = this.open, c = s && Store.data.clients.get(s.id);
+    if (!s) return;
+    if (!c && s.kind !== 'new') { this.close(); return; }
+    const keep = document.querySelector('.sheet'), top = keep ? keep.scrollTop : 0;
+    const focusId = document.activeElement && document.activeElement.id;
+    $('#layer').innerHTML = `<div class="scrim" data-act="close"></div><div class="sheet" role="dialog" aria-modal="true"><div class="grab"></div>${s.kind === 'note' ? noteHTML(c, s) : ficheHTML(c, s)}</div>`;
+    const sh = document.querySelector('.sheet'); sh.scrollTop = top;
+    if (focusId) { const f = document.getElementById(focusId); if (f) f.focus(); }
+  },
+};
+
+function noteHTML(c, s) {
+  const r = s.r || '', i = s.i || '';
+  const draft = { r, i, rdv: s.rdv };
+  const auto = r && (r !== 'joint' || i) && i !== 'stop' ? Rules.nextDate(draft, today()) : null;
+  const choice = (k, v, l, extra = '') => `<button class="choice ${s[k] === v ? 'on' : ''} ${extra}" data-act="pick" data-k="${k}" data-v="${v}">${l}</button>`;
+  return `<h3>${esc(c.nom)}</h3><p class="sub">${esc(motifLabel(c.motif))} · <span class="num">${esc(c.tel || '')}</span></p>
+    <div class="step-label">1. Résultat de l'appel</div>
+    <div class="choices">${choice('r', 'nr', 'Pas de réponse')}${choice('r', 'msg', 'Message laissé')}${choice('r', 'joint', 'Joint')}</div>
+    ${r === 'joint' ? `<div class="step-label">2. Issue</div><div class="choices two">
+      ${choice('i', 'rdv', 'RDV pris')}${choice('i', 'essai', 'Essai planifié')}${choice('i', 'devis', 'Devis à envoyer')}${choice('i', 'pasint', 'Pas intéressé pour l’instant')}${choice('i', 'stop', 'Ne plus appeler', 'stop')}</div>` : ''}
+    ${(i === 'rdv' || i === 'essai') ? `<div class="step-label">Date ${i === 'rdv' ? 'du RDV' : "de l'essai"}</div><input type="date" id="n-rdv" value="${s.rdv || ''}" min="${today()}" style="width:100%">` : ''}
+    <div class="step-label">Commentaire</div><input type="text" id="n-com" maxlength="140" placeholder="Facultatif, 140 caractères" value="${esc(s.com || '')}" style="width:100%">
+    ${r && i !== 'stop' ? `<div class="step-label">Prochaine relance</div>
+      <input type="date" id="n-next" value="${s.next || auto || ''}" style="width:100%">
+      <p class="sub" style="margin-top:4px">${s.next && s.next !== auto ? 'Date modifiée à la main.' : 'Calculée automatiquement : ' + ruleText(draft) + '.'}${r === 'nr' && (c.nrStreak || 0) >= 2 ? ' 3e sans réponse : le client passera dans « À contacter autrement ».' : ''}</p>` : ''}
+    <p class="err" id="n-err"></p>
+    <div class="foot"><button class="btn" data-act="close">Annuler</button><button class="btn primary" data-act="save-call" ${Store.canWrite ? '' : 'disabled'}>Enregistrer l'appel</button></div>`;
+}
+function ruleText(d) {
+  if (d.r === 'nr') return '2 jours ouvrés';
+  if (d.r === 'msg') return '3 jours ouvrés';
+  return { rdv: 'le jour ouvré qui suit le RDV', essai: "le jour ouvré qui suit l'essai", devis: '2 jours ouvrés', pasint: 'dans 3 mois' }[d.i] || '';
+}
+
+function ficheHTML(c, s) {
+  const isNew = s.kind === 'new';
+  c = c || { nom: '', tel: '', email: '', vehicule: '', motif: 'devis', commercial: isChef() ? (commerciaux()[0] || {}).id : UI.me, prochaine: today(), statut: 'actif', appels: [] };
+  const hist = [...(c.appels || [])].reverse();
+  return `<h3>${isNew ? 'Nouveau client' : esc(c.nom)}</h3>
+    ${isNew ? '' : `<p class="sub">${c.statut === 'stop' ? 'Ne plus appeler' : c.statut === 'autrement' ? 'À contacter autrement' : 'Prochaine relance le ' + fr(c.prochaine)} · ${(c.appels || []).length} appel(s)</p>`}
+    ${!isNew && c.statut === 'actif' ? `<div class="toolbar" style="margin-top:0"><button class="btn primary" data-act="note" data-id="${s.id}">Noter un appel</button></div>` : ''}
+    <div class="row2">
+      <label class="field">Nom<input type="text" id="f-nom" value="${esc(c.nom)}"></label>
+      <label class="field">Téléphone<input type="tel" id="f-tel" value="${esc(c.tel)}"></label>
+      <label class="field">E-mail<input type="email" id="f-email" value="${esc(c.email)}"></label>
+      <label class="field">Véhicule acheté ou en projet<input type="text" id="f-veh" value="${esc(c.vehicule)}"></label>
+      <label class="field">Motif de relance<select id="f-motif">${MOTIFS.map(m => `<option value="${m.id}" ${m.id === c.motif ? 'selected' : ''}>${m.label}</option>`).join('')}</select></label>
+      <label class="field">Fin de contrat (LOA / leasing)<input type="date" id="f-fin" value="${c.finContrat || ''}"></label>
+      <label class="field">Prochaine relance<input type="date" id="f-next" value="${c.prochaine || ''}"></label>
+      <label class="field">Commercial attribué<select id="f-com" ${isChef() ? '' : 'disabled'}>${commerciaux().map(x => `<option value="${x.id}" ${x.id === c.commercial ? 'selected' : ''}>${esc(x.nom)}</option>`).join('')}</select></label>
+    </div>
+    <p class="err" id="f-err"></p>
+    <div class="foot">${isNew ? '<button class="btn" data-act="close">Annuler</button>' : ''}<button class="btn primary" data-act="save-fiche" ${Store.canWrite ? '' : 'disabled'}>${isNew ? 'Créer le client' : 'Enregistrer la fiche'}</button></div>
+    ${!isNew && c.statut !== 'actif' ? `<div class="toolbar"><button class="btn" data-act="back" data-id="${s.id}">Remettre dans les appels</button></div>` : ''}
+    ${isNew ? '' : `<div class="step-label">Historique des appels</div>
+    ${hist.length ? `<div class="hist">${hist.map(a => `<div><span class="d">${fr(a.d)}<br>${a.d.slice(11, 16)}</span><span><b>${esc(RESULTS[a.r])}${a.i ? ' · ' + esc(ISSUES[a.i]) : ''}</b>${a.rdv ? ' le ' + fr(a.rdv) : ''}
+      <span class="c">${esc(comName(a.by))}${a.c ? ' · « ' + esc(a.c) + ' »' : ''}</span></span></div>`).join('')}</div>` : '<p class="sub">Aucun appel enregistré.</p>'}`}`;
+}
+
+/* ==========================================================================
+   Actions
+   ========================================================================== */
+let toastTimer;
+function toast(msg, undo) {
+  document.querySelectorAll('.toast').forEach(t => t.remove());
+  const t = document.createElement('div'); t.className = 'toast'; t.setAttribute('role', 'status');
+  t.innerHTML = `<span>${esc(msg)}</span>${undo ? '<button>Annuler</button>' : ''}`;
+  if (undo) t.querySelector('button').onclick = () => { t.remove(); undo(); };
+  document.body.appendChild(t); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.remove(), undo ? 6000 : 2800);
+}
+async function guarded(fn) {
+  if (!Store.canWrite) { toast('Lecture seule : modification impossible.'); return false; }
+  try { await fn(); return true; }
+  catch (e) {
+    if (e && e.code === 'quota_exceeded') toast('La base est pleine : supprimez des clients inactifs.');
+    else if (e && e.code === 'invalid_argument') { Store.canWrite = false; toast('Modification refusée : votre accès est en lecture seule.'); render(); }
+    else toast("L'enregistrement a échoué. Réessayez dans un instant.");
+    return false;
+  }
+}
+const clientDoc = id => { const c = Store.data.clients.get(id); return c ? JSON.parse(JSON.stringify(c)) : null; };
+const nowISO = () => `${today()}T${new Date().toTimeString().slice(0, 8)}`;
+
+async function recordCall(id, call, manualNext) {
+  const before = clientDoc(id);
+  const after = Rules.applyCall(before, call, manualNext);
+  const ok = await guarded(() => Store.set('clients', id, after));
+  if (!ok) return;
+  const msg = after.statut === 'stop' ? `${before.nom} : ne plus appeler` : after.statut === 'autrement' ? `${before.nom} passe dans « À contacter autrement »` : `${RESULTS[call.r]}${call.i ? ' · ' + ISSUES[call.i] : ''} · relance le ${fr(after.prochaine)}`;
+  toast(msg, () => guarded(() => Store.set('clients', id, before)).then(ok2 => ok2 && toast('Appel annulé')));
+}
+
+function saveCallFromSheet() {
+  const s = Sheet.open, err = $('#n-err');
+  if (!s.r) { err.textContent = 'Choisissez le résultat de l’appel.'; return; }
+  if (s.r === 'joint' && !s.i) { err.textContent = 'Choisissez l’issue de l’appel.'; return; }
+  const rdv = $('#n-rdv') ? $('#n-rdv').value : '';
+  if ((s.i === 'rdv' || s.i === 'essai') && !rdv) { err.textContent = `Indiquez la date ${s.i === 'rdv' ? 'du RDV' : "de l'essai"}.`; return; }
+  const next = $('#n-next') ? $('#n-next').value : '';
+  const call = { id: 'p' + Date.now().toString(36), d: nowISO(), by: UI.me, r: s.r, i: s.r === 'joint' ? s.i : '', rdv: rdv || '', c: ($('#n-com').value || '').trim() };
+  const auto = s.i === 'stop' ? null : Rules.nextDate(call, today());
+  Sheet.close();
+  recordCall(s.id, call, next && next !== auto ? next : null);
+}
+
+async function saveFiche() {
+  const s = Sheet.open, val = id => ($(id) || {}).value || '';
+  const nom = val('#f-nom').trim();
+  if (!nom) { $('#f-err').textContent = 'Indiquez le nom du client.'; return; }
+  const base = s.kind === 'new' ? { appels: [], statut: 'actif', nrStreak: 0, dernierContact: '' } : clientDoc(s.id);
+  const body = { ...base, nom, tel: val('#f-tel').trim(), email: val('#f-email').trim(), vehicule: val('#f-veh').trim(), motif: val('#f-motif'),
+    finContrat: val('#f-fin'), prochaine: val('#f-next') || (base.statut === 'actif' ? today() : base.prochaine || null),
+    commercial: isChef() ? val('#f-com') : (base.commercial || UI.me) };
+  const id = s.kind === 'new' ? 'k' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5) : s.id;
+  if (await guarded(() => Store.set('clients', id, body))) { toast(s.kind === 'new' ? 'Client ajouté' : 'Fiche enregistrée'); if (s.kind === 'new') Sheet.close(); else Sheet.render(); }
+}
+
+const normTel = t => String(t || '').replace(/\D/g, '').replace(/^33/, '0');
+async function importFile(file) {
+  if (!window.XLSX) { toast("Le module Excel n'a pas pu se charger. Rechargez la page."); return; }
+  let rows;
+  try { const wb = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true }); rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: false, defval: '', dateNF: 'yyyy-mm-dd' }); }
+  catch (e) { toast('Ce fichier ne peut pas être lu. Enregistrez-le en .xlsx ou .csv.'); return; }
+  const norm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  const hi = rows.findIndex(r => r.some(c => norm(c).includes('nom')));
+  if (hi < 0) { toast('Aucune colonne « Nom » trouvée dans la première feuille.'); return; }
+  const head = rows[hi].map(norm), find = ks => head.findIndex(h => ks.some(k => h.includes(k)));
+  const iN = find(['nom', 'client']), iT = find(['tel', 'portable', 'mobile']), iE = find(['mail']), iV = find(['vehicule', 'modele', 'voiture', 'projet']),
+    iD = find(['dernier', 'contact']), iC = find(['commercial', 'vendeur', 'attribue']), iM = find(['motif']);
+  const byTel = new Map(clients().map(c => [normTel(c.tel) || c.email, c]));
+  const coms = commerciaux();
+  const toDate = v => { const s = String(v || '').trim(); let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/); if (m) return m[0]; m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/); if (m) return `${m[3].length === 2 ? '20' + m[3] : m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`; return ''; };
+  let created = 0, updated = 0, skipped = 0;
+  const ok = await guarded(async () => {
+    for (const r of rows.slice(hi + 1)) {
+      const nom = String(r[iN] || '').trim(); if (!nom) { skipped++; continue; }
+      const tel = iT >= 0 ? String(r[iT] || '').trim() : '', email = iE >= 0 ? String(r[iE] || '').trim() : '';
+      const comTxt = iC >= 0 ? norm(r[iC]) : '';
+      const com = coms.find(c => comTxt && norm(c.nom).includes(comTxt)) || coms.find(c => comTxt && comTxt.includes(norm(c.nom).split(' ')[0]));
+      const motifTxt = iM >= 0 ? norm(r[iM]) : '';
+      const motif = (MOTIFS.find(m => motifTxt && (norm(m.label).includes(motifTxt) || motifTxt.includes(m.id))) || {}).id || '';
+      const key = normTel(tel) || email;
+      const ex = key && byTel.get(key);
+      const fields = { nom, tel, email, vehicule: iV >= 0 ? String(r[iV] || '').trim() : '', dernierContact: toDate(iD >= 0 ? r[iD] : '') };
+      if (ex) {
+        const body = { ...clientDoc(ex.id), ...Object.fromEntries(Object.entries(fields).filter(([, v]) => v)) };
+        if (com) body.commercial = com.id; if (motif) body.motif = motif;
+        await Store.set('clients', ex.id, body); updated++;
+      } else {
+        const id = 'k' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+        const body = { ...fields, motif, commercial: com ? com.id : (isChef() ? '' : UI.me), prochaine: today(), statut: 'actif', nrStreak: 0, appels: [] };
+        await Store.set('clients', id, body); if (key) byTel.set(key, { id, ...body }); created++;
+      }
+    }
+  });
+  if (!ok) return;
+  modal(`<h2>Import terminé</h2><ul class="tests"><li class="ok"><b>${created}</b> client(s) ajouté(s), à rappeler à partir d'aujourd'hui</li>
+    <li><b>${updated}</b> client(s) déjà connu(s) mis à jour<small>Reconnus par le téléphone ou l'e-mail : l'historique d'appels est conservé.</small></li>
+    ${skipped ? `<li class="ko"><b>${skipped}</b> ligne(s) sans nom ignorée(s)</li>` : ''}</ul><div class="foot"><button class="btn primary" data-act="modal-close">Fermer</button></div>`);
+}
+
+function modal(html) { closeModal(); const w = document.createElement('div'); w.className = 'modal-wrap'; w.id = 'modal'; w.innerHTML = `<div class="modal" role="dialog" aria-modal="true">${html}</div>`; document.body.appendChild(w); }
+const closeModal = () => { const w = $('#modal'); if (w) w.remove(); };
+
+/** Export : mêmes lignes que le tableau de bord, plus le détail des appels de la période. */
+function exportSheets() {
+  const range = periodRange(), D = dashboard(range);
+  const head = ['Commercial', 'Appels', 'Joints', 'Joignabilité', 'RDV', 'Essais', 'Transformation', 'Relances en retard'];
+  const line = (n, s) => [n, s.appels, s.joints, Rules.pct(s.joign), s.rdv, s.essais, Rules.pct(s.transfo), s.retard];
+  const bord = [[`Période : ${range.label}`], head, ...D.rows.map(r => line(r.com.nom, r)), line('Équipe', D.tot)];
+  const rank = [['Rang', 'Commercial', 'RDV + essais', 'Appels', 'Joignabilité'], ...weekRanking().map((r, i) => [i + 1, r.com.nom, r.score, r.appels, Rules.pct(r.joign)])];
+  const calls = [['Date', 'Heure', 'Commercial', 'Client', 'Résultat', 'Issue', 'Date RDV / essai', 'Commentaire'],
+    ...D.calls.sort((a, b) => a.d.localeCompare(b.d)).map(a => [fr(a.d), a.d.slice(11, 16), comName(a.by), a.client.nom, RESULTS[a.r], a.i ? ISSUES[a.i] : '', a.rdv ? fr(a.rdv) : '', a.c || ''])];
+  return { bord, rank, calls };
+}
+async function exportExcel() {
+  if (!window.XLSX) { toast("Le module Excel n'a pas pu se charger. Rechargez la page."); return; }
+  const { bord, rank, calls } = exportSheets();
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(bord); ws['!cols'] = [{ wch: 22 }, ...Array(7).fill({ wch: 14 })];
+  XLSX.utils.book_append_sheet(wb, ws, 'Tableau de bord');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rank), 'Classement semaine');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(calls), 'Appels');
+  const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' }), filename = `relances-${periodRange().start}.xlsx`;
+  let dl = null; try { dl = window.claude && window.claude.use ? await window.claude.use('downloads') : null; } catch (e) {}
+  if (dl) { try { await dl.save({ filename, data: buf }); toast('Export prêt'); } catch (e) { if (e.code !== 'declined') toast("L'export n'a pas pu être enregistré."); } }
+  else XLSX.writeFile(wb, filename);
+}
+
+/* ==========================================================================
+   Vérifications (critères de recette)
+   ========================================================================== */
+function runChecks() {
+  const R = [], t = (n, ok, d) => R.push({ name: n, ok, detail: d });
+  const base = { nom: 'Test', commercial: 'A', motif: 'devis', statut: 'actif', prochaine: '2026-10-19', appels: [], nrStreak: 0 };
+  const call = (d, r, i = '') => ({ d: d + 'T10:00:00', by: 'A', r, i, rdv: '', c: '' });
+
+  const c1 = Rules.applyCall(base, call('2026-10-19', 'nr'));
+  const inTue = Rules.dueList([c1], '2026-10-20', 'A').length, inWed = Rules.dueList([c1], '2026-10-21', 'A').length;
+  t('« Pas de réponse » un lundi → de retour le mercredi', c1.prochaine === '2026-10-21' && inTue === 0 && inWed === 1, `appel le lundi 19/10 → relance le ${fr(c1.prochaine)} · liste du mardi : ${inTue} · liste du mercredi : ${inWed}`);
+
+  const c2 = Rules.applyCall(base, { ...call('2026-10-19', 'joint', 'stop') });
+  const seen = ['2026-10-19', '2026-12-31', '2027-06-30'].reduce((n, d) => n + Rules.dueList([{ ...c2 }], d, 'chef').length, 0);
+  t('« Ne plus appeler » : plus jamais dans une liste d’appels', c2.statut === 'stop' && seen === 0, `statut « ${c2.statut} », apparitions dans les listes testées : ${seen}`);
+
+  let c3 = base;
+  ['2026-10-19', '2026-10-21', '2026-10-23'].forEach(d => { c3 = Rules.applyCall(c3, call(d, 'nr')); });
+  t('3 « pas de réponse » → « À contacter autrement »', c3.statut === 'autrement' && Rules.dueList([c3], '2026-12-01', 'A').length === 0, `après 3 appels sans réponse : statut « ${c3.statut === 'autrement' ? 'À contacter autrement' : c3.statut} », absent des appels du jour`);
+
+  const calls = [...Array(12).fill('nr'), ...Array(6).fill('joint'), 'joint', 'joint'].map((r, k) => ({ r, i: k >= 18 ? 'rdv' : '' }));
+  const s = Rules.stats(calls);
+  t('20 appels, 8 joints, 2 RDV → 40 % et 25 %', Rules.pct(s.joign) === '40 %' && Rules.pct(s.transfo) === '25 %', `joignabilité ${Rules.pct(s.joign)} · transformation ${Rules.pct(s.transfo)}`);
+
+  const late = { ...base, id: 'late', nom: 'Zoé Retard', prochaine: '2026-10-19' }, fresh = { ...base, id: 'fresh', nom: 'Alain Àjour', prochaine: '2026-10-20' };
+  const L = Rules.dueList([fresh, late], '2026-10-20', 'A');
+  t('Relance non traitée → en tête le lendemain, marquée en retard', L[0].c.id === 'late' && L[0].late === 1 && L[1].late === 0, `liste du 20/10 : 1. ${L[0].c.nom} (retard ${L[0].late} j), 2. ${L[1].c.nom}`);
+
+  const A = { ...base, id: 'a', commercial: 'A', prochaine: '2026-10-20' }, B = { ...base, id: 'b', commercial: 'B', prochaine: '2026-10-20' };
+  const va = Rules.dueList([A, B], '2026-10-20', 'A').map(x => x.c.id).join(','), vc = Rules.dueList([A, B], '2026-10-20', 'chef').length;
+  t('Un commercial voit ses clients ; le chef voit tout', va === 'a' && vc === 2, `commercial A : ${va} · chef des ventes : ${vc} clients`);
+
+  let ok = null, detail = 'Ouvrez le tableau de bord (en chef des ventes) pour comparer avec l’écran.';
+  const table = document.getElementById('dash');
+  if (table && UI.tab === 'bord') {
+    const { bord } = exportSheets(); let n = 0, diff = 0;
+    [...table.querySelectorAll('tbody tr, tfoot tr')].forEach((tr, i) => [...tr.querySelectorAll('td')].slice(1).forEach((td, j) => { n++; if (String(bord[i + 2][j + 1]) !== td.textContent.trim()) diff++; }));
+    ok = diff === 0; detail = `${n} chiffres comparés, ${diff} différence(s)`;
+  }
+  t('L’export Excel reprend les chiffres du tableau de bord', ok !== false, detail);
+  return R;
+}
+function showChecks() {
+  const res = runChecks();
+  modal(`<h2>Vérifications</h2><p class="lead">Contrôle des règles sur des clients de test.</p>
+    <ul class="tests">${res.map(r => `<li class="${r.ok ? 'ok' : 'ko'}"><b>${r.ok ? '✔' : '✘'}</b> ${esc(r.name)}<small>${esc(r.detail)}</small></li>`).join('')}</ul>
+    <div class="step-label">Simuler une autre date</div>
+    <p class="lead">Pour tester les relances à J+2 ou les retards, affichez l'appli comme si on était un autre jour (dans cet onglet uniquement).</p>
+    <div class="toolbar"><input type="date" id="sim" value="${today()}"><button class="btn" data-act="sim-on">Simuler cette date</button>${UI.simDay ? '<button class="btn ghost" data-act="sim-off">Revenir à aujourd’hui</button>' : ''}</div>
+    <div class="foot"><button class="btn primary" data-act="modal-close">Fermer</button></div>`);
+}
+
+/* ==========================================================================
+   Événements
+   ========================================================================== */
+document.addEventListener('click', e => {
+  const tab = e.target.closest('#tabs button');
+  if (tab) { UI.tab = tab.dataset.tab; lsSet('relances.tab', UI.tab); render(); window.scrollTo(0, 0); return; }
+  const el = e.target.closest('[data-act]'); if (!el) return;
+  const a = el.dataset.act, id = el.dataset.id;
+  switch (a) {
+    case 'pick-me': UI.me = id; lsSet('relances.me', id); render(); break;
+    case 'quick': recordCall(id, { id: 'p' + Date.now().toString(36), d: nowISO(), by: UI.me, r: el.dataset.r, i: '', rdv: '', c: '' }); break;
+    case 'note': Sheet.show({ kind: 'note', id, r: el.dataset.r || '' }); break;
+    case 'open': Sheet.show({ kind: 'fiche', id }); break;
+    case 'new': Sheet.show({ kind: 'new' }); break;
+    case 'close': Sheet.close(); break;
+    case 'pick': {
+      const s = Sheet.open; s.com = ($('#n-com') || {}).value || s.com; s.rdv = ($('#n-rdv') || {}).value || s.rdv; s.next = '';
+      s[el.dataset.k] = el.dataset.v; if (el.dataset.k === 'r' && el.dataset.v !== 'joint') s.i = '';
+      if ((s.i === 'rdv' || s.i === 'essai') && !s.rdv) s.rdv = Rules.ymd(Rules.addBusinessDays(Rules.parse(today()), 1));
+      Sheet.render(); break;
+    }
+    case 'save-call': saveCallFromSheet(); break;
+    case 'save-fiche': saveFiche(); break;
+    case 'back': {
+      const c = clientDoc(id); c.statut = 'actif'; c.nrStreak = 0; c.prochaine = today();
+      guarded(() => Store.set('clients', id, c)).then(ok => { if (ok) { toast(`${c.nom} est de retour dans les appels du jour`); if (Sheet.open) Sheet.render(); } }); break;
+    }
+    case 'stop': {
+      const c = clientDoc(id); c.statut = 'stop'; c.prochaine = null;
+      guarded(() => Store.set('clients', id, c)).then(ok => ok && toast(`${c.nom} : ne plus appeler`)); break;
+    }
+    case 'copy': {
+      const v = el.dataset.v;
+      if (navigator.clipboard) navigator.clipboard.writeText(v).then(() => toast('Copié : ' + v), () => toast(v)); else toast(v);
+      break;
+    }
+    case 'period': UI.period = el.dataset.v; UI.anchor = null; lsSet('relances.period', UI.period); render(); break;
+    case 'shift': {
+      const t = Rules.parse(UI.anchor || today()), n = Number(el.dataset.v);
+      UI.anchor = Rules.ymd(UI.period === 'semaine' ? Rules.addDays(t, 7 * n) : new Date(t.getFullYear(), t.getMonth() + n, 1)); render(); break;
+    }
+    case 'metric': UI.metric = el.dataset.v; render(); break;
+    case 'see-com': UI.tab = 'clients'; UI.fCom = id; render(); break;
+    case 'modal-close': closeModal(); break;
+    case 'sim-on': { const v = $('#sim').value; if (v) { UI.simDay = v; ssSet('relances.today', v); closeModal(); render(); } break; }
+    case 'sim-off': UI.simDay = null; ssSet('relances.today', null); closeModal(); render(); break;
+  }
+});
+document.addEventListener('change', e => {
+  const t = e.target;
+  if (t.id === 'me') { UI.me = t.value; lsSet('relances.me', t.value); UI.fCom = ''; render(); }
+  if (t.id === 'f-com' && !Sheet.open) { UI.fCom = t.value; render(); }
+  if (t.id === 'n-next' && Sheet.open) Sheet.open.next = t.value;
+  if (t.id === 'n-rdv' && Sheet.open) { Sheet.open.rdv = t.value; Sheet.open.com = $('#n-com').value; Sheet.render(); }
+  if (t.id === 'file-import' && t.files[0]) { const f = t.files[0]; t.value = ''; importFile(f); }
+});
+let qT; document.addEventListener('input', e => { if (e.target.id === 'q') { clearTimeout(qT); qT = setTimeout(() => { UI.q = e.target.value.trim(); render(); const q = $('#q'); q.focus(); q.setSelectionRange(q.value.length, q.value.length); }, 200); } });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { if ($('#modal')) closeModal(); else Sheet.close(); } });
+
+const footer = document.createElement('div');
+footer.className = 'col'; footer.style.cssText = 'text-align:center;margin-top:24px';
+footer.innerHTML = '<button class="btn ghost" id="btn-tests">Vérifications et date simulée</button>';
+$('main').appendChild(footer);
+$('#btn-tests').addEventListener('click', showChecks);
+$('#v-jour').innerHTML = '<div class="empty">Chargement des clients…</div>';
+Store.init(render);
+</script>
