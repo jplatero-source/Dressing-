@@ -1,0 +1,844 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cut">
+<meta name="theme-color" content="#f5f0e8">
+<title>Rien à me mettre</title>
+<style>
+  :root {
+    --bg: #f5f0e8;
+    --surface: #fffdf9;
+    --ink: #2b2622;
+    --muted: #8a8079;
+    --line: #e7dfd3;
+    --accent: #c4553b;
+    --accent-ink: #fff;
+    --like: #2f8f5b;
+    --nope: #c43b3b;
+    --radius: 18px;
+    --shadow: 0 6px 20px rgba(60, 40, 20, .10);
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font: 15px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    overscroll-behavior: none;
+  }
+  button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; }
+  .app { max-width: 520px; margin: 0 auto; min-height: 100%; padding-bottom: 84px; }
+
+  header.top {
+    position: sticky; top: 0; z-index: 5; background: var(--bg);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: calc(14px + env(safe-area-inset-top)) 16px 10px;
+  }
+  h1 { font-family: Georgia, "Times New Roman", serif; font-weight: 400; font-size: 26px; margin: 0; letter-spacing: -.3px; }
+  h1 small { display: block; font-size: 12.5px; line-height: 1.3; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: var(--muted); letter-spacing: .3px; }
+  .icon-btn { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: var(--surface); box-shadow: var(--shadow); font-size: 18px; }
+
+  section.view { display: none; padding: 0 16px; }
+  section.view.active { display: block; }
+
+  /* chips */
+  .chips { display: flex; gap: 8px; overflow-x: auto; padding: 4px 0 10px; scrollbar-width: none; }
+  .chips::-webkit-scrollbar { display: none; }
+  .chip {
+    flex: none; padding: 7px 13px; border-radius: 999px; background: var(--surface);
+    border: 1px solid var(--line); font-size: 13.5px; white-space: nowrap;
+  }
+  .chip.on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  .row { display: flex; align-items: center; gap: 10px; }
+  .row.between { justify-content: space-between; }
+  .label { font-size: 12px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); margin: 6px 0 2px; }
+  select.sort { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 6px 8px; font: inherit; font-size: 13.5px; color: var(--ink); }
+
+  /* wardrobe grid */
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .item { position: relative; background: var(--surface); border-radius: 14px; overflow: hidden; box-shadow: var(--shadow); text-align: left; padding: 0; }
+  .item .swatch { aspect-ratio: 3/4; display: flex; align-items: flex-end; padding: 8px; font-size: 12.5px; font-weight: 600; background-size: cover; background-position: center; }
+  .item .meta { padding: 6px 8px 8px; font-size: 11.5px; color: var(--muted); }
+  .item.washing .swatch { filter: grayscale(.9) opacity(.45); }
+  .item .wash {
+    position: absolute; top: 6px; right: 6px; width: 30px; height: 30px; border-radius: 50%;
+    background: rgba(255,255,255,.85); display: grid; place-items: center; font-size: 15px;
+  }
+  .item.washing .wash { background: var(--accent); }
+  .badge-wash { position: absolute; top: 42%; left: 50%; transform: translate(-50%,-50%); background: var(--ink); color: var(--bg); font-size: 11px; padding: 3px 8px; border-radius: 99px; white-space: nowrap; }
+  .group-title { grid-column: 1/-1; font-family: Georgia, serif; font-size: 18px; margin: 10px 0 0; }
+
+  .fab {
+    position: fixed; right: max(16px, calc(50% - 244px)); bottom: 96px; z-index: 6;
+    background: var(--accent); color: var(--accent-ink); border-radius: 999px; padding: 14px 20px;
+    font-weight: 600; box-shadow: 0 10px 24px rgba(196,85,59,.35);
+  }
+
+  /* bottom nav */
+  nav.tabs {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 7; background: var(--surface);
+    border-top: 1px solid var(--line); display: flex; justify-content: center;
+    padding: 6px 0 calc(6px + env(safe-area-inset-bottom));
+  }
+  nav.tabs .inner { display: flex; width: 100%; max-width: 520px; }
+  nav.tabs button { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 0; font-size: 11.5px; color: var(--muted); }
+  nav.tabs button span { font-size: 21px; filter: grayscale(1) opacity(.6); }
+  nav.tabs button.on { color: var(--ink); font-weight: 600; }
+  nav.tabs button.on span { filter: none; }
+
+  /* generator */
+  .primary { width: 100%; background: var(--ink); color: var(--bg); border-radius: 14px; padding: 13px; font-weight: 600; font-size: 16px; margin: 6px 0 14px; }
+  .primary.accent { background: var(--accent); color: var(--accent-ink); }
+  .deck { position: relative; height: clamp(340px, calc(100dvh - 470px), 560px); margin-bottom: 14px; }
+  .deck-empty { height: 100%; display: grid; place-items: center; text-align: center; color: var(--muted); border: 2px dashed var(--line); border-radius: var(--radius); padding: 24px; }
+  .card {
+    position: absolute; inset: 0; background: var(--surface); border-radius: var(--radius);
+    box-shadow: 0 14px 36px rgba(60,40,20,.16); padding: 14px; touch-action: pan-y; user-select: none;
+    display: flex; flex-direction: column; will-change: transform;
+  }
+  .card.behind { transform: scale(.95) translateY(14px); opacity: .7; pointer-events: none; }
+  .card.behind2 { transform: scale(.9) translateY(28px); opacity: .4; pointer-events: none; }
+  .card .head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
+  .card .head b { font-family: Georgia, serif; font-weight: 400; font-size: 18px; }
+  .card .head small { color: var(--muted); font-size: 12px; }
+  .stamp { position: absolute; top: 28px; padding: 6px 14px; border: 3px solid; border-radius: 10px; font-weight: 800; font-size: 22px; letter-spacing: 1px; opacity: 0; z-index: 3; pointer-events: none; }
+  .stamp.like { left: 22px; color: var(--like); transform: rotate(-12deg); }
+  .stamp.nope { right: 22px; color: var(--nope); transform: rotate(12deg); }
+
+  .board {
+    flex: 1; display: grid; gap: 10px; min-height: 0;
+    grid-template-columns: 1.35fr 1fr; grid-template-rows: repeat(6, 1fr);
+    background: repeating-linear-gradient(45deg, #faf6ef, #faf6ef 10px, #f6f0e6 10px, #f6f0e6 20px);
+    border-radius: 12px; padding: 10px;
+  }
+  .piece { position: relative; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,.12); background-size: cover; background-position: center; display: flex; align-items: flex-end; min-height: 0; }
+  .piece .name { margin: 6px; background: rgba(255,255,255,.88); color: #2b2622; border-radius: 99px; padding: 3px 9px; font-size: 12px; font-weight: 600; max-width: calc(100% - 12px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .piece .acts { position: absolute; top: 5px; right: 5px; display: flex; gap: 4px; }
+  .piece .acts button { width: 30px; height: 30px; border-radius: 50%; background: rgba(255,255,255,.9); color: #2b2622; font-size: 15px; display: grid; place-items: center; box-shadow: 0 2px 6px rgba(0,0,0,.15); }
+  .piece.empty { background: transparent; box-shadow: none; border: 2px dashed #d8ccbb; align-items: center; justify-content: center; color: var(--muted); font-size: 12.5px; }
+  .p-top { grid-column: 1; grid-row: 1 / 4; transform: rotate(-1.5deg); }
+  .p-bottom { grid-column: 1; grid-row: 4 / 7; transform: rotate(1deg); }
+  .p-dress { grid-column: 1; grid-row: 1 / 7; transform: rotate(-1deg); }
+  .p-outer { grid-column: 2; grid-row: 1 / 3; transform: rotate(2deg); }
+  .p-acc { grid-column: 2; grid-row: 3 / 5; transform: rotate(-2deg); }
+  .p-shoes { grid-column: 2; grid-row: 5 / 7; transform: rotate(1.5deg); }
+
+  .swipe-btns { display: flex; justify-content: center; gap: 28px; margin-bottom: 8px; }
+  .swipe-btns button { width: 58px; height: 58px; border-radius: 50%; background: var(--surface); box-shadow: var(--shadow); font-size: 28px; }
+  .swipe-btns .no { color: var(--nope); }
+  .swipe-btns .yes { color: var(--like); }
+  .hint { text-align: center; color: var(--muted); font-size: 12.5px; margin: 0 0 12px; }
+
+  /* saved */
+  .saved-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .mini { background: var(--surface); border-radius: 14px; box-shadow: var(--shadow); padding: 8px; position: relative; }
+  .mini .board { height: 220px; padding: 6px; gap: 6px; }
+  .mini .piece .name { font-size: 10px; padding: 2px 6px; margin: 4px; }
+  .mini .foot { display: flex; justify-content: space-between; align-items: center; padding: 6px 2px 0; font-size: 12px; color: var(--muted); }
+  .mini .foot button { color: var(--nope); font-size: 12px; }
+  .warn { color: var(--accent); font-weight: 600; }
+  .empty-msg { text-align: center; color: var(--muted); padding: 40px 20px; }
+
+  /* sheet */
+  .scrim { position: fixed; inset: 0; background: rgba(30,20,10,.4); z-index: 20; display: none; }
+  .scrim.open { display: block; }
+  .sheet {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 21; max-width: 520px; margin: 0 auto;
+    background: var(--surface); border-radius: 22px 22px 0 0; max-height: 92vh; overflow-y: auto;
+    padding: 10px 18px calc(18px + env(safe-area-inset-bottom)); transform: translateY(105%); transition: transform .25s ease;
+  }
+  .sheet.open { transform: none; }
+  .grab { width: 40px; height: 5px; border-radius: 3px; background: var(--line); margin: 0 auto 10px; }
+  .sheet h2 { font-family: Georgia, serif; font-weight: 400; margin: 0 0 10px; font-size: 22px; }
+  .photo-pick { width: 100%; aspect-ratio: 16/10; border-radius: 14px; border: 2px dashed var(--line); display: grid; place-items: center; color: var(--muted); background-size: cover; background-position: center; margin-bottom: 8px; font-weight: 600; }
+  input.text { width: 100%; border: 1px solid var(--line); border-radius: 12px; padding: 12px; font: inherit; background: var(--bg); color: var(--ink); }
+  .swatches { display: flex; flex-wrap: wrap; gap: 8px; padding: 4px 0 6px; }
+  .sw { width: 36px; height: 36px; border-radius: 50%; border: 2px solid rgba(0,0,0,.08); position: relative; }
+  .sw.on { outline: 3px solid var(--ink); outline-offset: 2px; }
+  .sw-name { font-size: 12.5px; color: var(--muted); }
+  .sheet .actions { display: flex; gap: 10px; margin-top: 16px; }
+  .sheet .actions button { flex: 1; padding: 13px; border-radius: 12px; font-weight: 600; }
+  .btn-ghost { border: 1px solid var(--line) !important; }
+  .btn-danger { color: var(--nope); border: 1px solid #efcaca !important; }
+  .btn-main { background: var(--ink); color: var(--bg); }
+  .tests li { margin: 6px 0; }
+  .tests .ok { color: var(--like); }
+  .tests .ko { color: var(--nope); }
+  .tests small { color: var(--muted); display: block; }
+
+  .toast {
+    position: fixed; left: 50%; bottom: 100px; transform: translate(-50%, 20px); opacity: 0; z-index: 30;
+    background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 12px; font-size: 14px;
+    transition: all .25s; pointer-events: none; max-width: 90vw; text-align: center;
+  }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <h1 id="title">Mon dressing<small id="subtitle"></small></h1>
+    <button class="icon-btn" data-action="open-settings" aria-label="Réglages et tests">⚙︎</button>
+  </header>
+
+  <section class="view active" id="view-dressing">
+    <div class="chips" id="cat-chips"></div>
+    <div class="row between" style="margin-bottom:10px">
+      <span class="sw-name" id="count-line"></span>
+      <label class="row" style="gap:6px"><span class="sw-name">Trier par</span>
+        <select class="sort" id="sort">
+          <option value="cat">Catégorie</option>
+          <option value="color">Couleur</option>
+        </select>
+      </label>
+    </div>
+    <div class="grid" id="grid"></div>
+    <button class="fab" data-action="add">＋ Ajouter</button>
+  </section>
+
+  <section class="view" id="view-generate">
+    <div class="label">Saison</div>
+    <div class="chips" id="season-chips"></div>
+    <div class="label">Style</div>
+    <div class="chips" id="style-chips"></div>
+    <button class="primary accent" data-action="generate">✨ Générer des tenues</button>
+    <div class="deck" id="deck"></div>
+    <div class="swipe-btns" id="swipe-btns">
+      <button class="no" data-action="nope" aria-label="Je ne veux plus la voir">✕</button>
+      <button class="yes" data-action="like" aria-label="Sauvegarder">♥</button>
+    </div>
+    <p class="hint">Glissez à droite pour garder ♥, à gauche pour écarter ✕. ↻ remplace une pièce.</p>
+  </section>
+
+  <section class="view" id="view-saved">
+    <div class="saved-grid" id="saved"></div>
+  </section>
+</div>
+
+<nav class="tabs"><div class="inner">
+  <button data-tab="dressing" class="on"><span>👚</span>Dressing</button>
+  <button data-tab="generate"><span>✨</span>Générer</button>
+  <button data-tab="saved"><span>♥</span>Mes tenues</button>
+</div></nav>
+
+<div class="scrim" id="scrim" data-action="close-sheet"></div>
+<div class="sheet" id="sheet"></div>
+<div class="toast" id="toast"></div>
+<input type="file" id="file" accept="image/*" hidden>
+
+<script>
+/* ============================================================
+   Données de référence
+   ============================================================ */
+const CATS = [
+  { id: 'haut',       label: 'Haut',             plural: 'Hauts' },
+  { id: 'bas',        label: 'Bas',              plural: 'Bas' },
+  { id: 'robe',       label: 'Robe',             plural: 'Robes' },
+  { id: 'veste',      label: 'Veste / manteau',  plural: 'Vestes' },
+  { id: 'chaussures', label: 'Chaussures',       plural: 'Chaussures' },
+  { id: 'accessoire', label: 'Accessoire',       plural: 'Accessoires' },
+];
+const COLORS = [
+  { id: 'noir',   label: 'Noir',   hex: '#1f1d1c', neutral: true },
+  { id: 'blanc',  label: 'Blanc',  hex: '#f7f5f0', neutral: true },
+  { id: 'gris',   label: 'Gris',   hex: '#9c9a97', neutral: true },
+  { id: 'beige',  label: 'Beige',  hex: '#d8c4a2', neutral: true },
+  { id: 'marine', label: 'Marine', hex: '#1f2e4d', neutral: true },
+  { id: 'denim',  label: 'Denim',  hex: '#4d6d93', neutral: true },
+  { id: 'rouge',  label: 'Rouge',  hex: '#cf3a35' },
+  { id: 'rose',   label: 'Rose',   hex: '#ef94b2' },
+  { id: 'orange', label: 'Orange', hex: '#ee8a2c' },
+  { id: 'jaune',  label: 'Jaune',  hex: '#f0cd3c' },
+  { id: 'vert',   label: 'Vert',   hex: '#4f9a5c' },
+  { id: 'bleu',   label: 'Bleu',   hex: '#3b7ed6' },
+  { id: 'violet', label: 'Violet', hex: '#8a5cc7' },
+  { id: 'marron', label: 'Marron', hex: '#86583a' },
+];
+const SEASONS = [
+  { id: 'ete', label: 'Été' }, { id: 'mi', label: 'Mi-saison' },
+  { id: 'hiver', label: 'Hiver' }, { id: 'toutes', label: 'Toutes' },
+];
+const STYLES = [{ id: 'casual', label: 'Casual' }, { id: 'chic', label: 'Chic' }, { id: 'sport', label: 'Sport' }];
+
+const colorOf = id => COLORS.find(c => c.id === id) || COLORS[0];
+const catOf = id => CATS.find(c => c.id === id);
+const labelOf = (list, id) => (list.find(x => x.id === id) || {}).label || id;
+
+const DEMO = [
+  ['T-shirt blanc',      'haut',       'blanc',  'toutes', 'casual'],
+  ['Débardeur jaune',    'haut',       'jaune',  'ete',    'casual'],
+  ['Pull col roulé',     'haut',       'noir',   'hiver',  'chic'],
+  ['Chemise blanche',    'haut',       'blanc',  'toutes', 'chic'],
+  ['Sweat à capuche',    'haut',       'gris',   'toutes', 'sport'],
+  ['Jean brut',          'bas',        'denim',  'toutes', 'casual'],
+  ['Pantalon tailleur',  'bas',        'beige',  'toutes', 'chic'],
+  ['Jogging',            'bas',        'noir',   'toutes', 'sport'],
+  ['Robe portefeuille',  'robe',       'rouge',  'ete',    'chic'],
+  ['Manteau en laine',   'veste',      'beige',  'hiver',  'chic'],
+  ['Veste en jean',      'veste',      'denim',  'mi',     'casual'],
+  ['Baskets blanches',   'chaussures', 'blanc',  'toutes', 'casual'],
+  ['Escarpins noirs',    'chaussures', 'noir',   'toutes', 'chic'],
+  ['Running',            'chaussures', 'orange', 'toutes', 'sport'],
+  ['Foulard en soie',    'accessoire', 'rose',   'toutes', 'chic'],
+];
+const demoItems = () => DEMO.map(([name, cat, color, season, style], i) =>
+  ({ id: 'd' + (i + 1), name, cat, color, season, style, laundry: false, photo: null }));
+
+/* ============================================================
+   Moteur de combinaison (fonctions pures, testables)
+   ============================================================ */
+const Engine = (() => {
+  const SLOT_CAT = { top: 'haut', bottom: 'bas', dress: 'robe', shoes: 'chaussures', outer: 'veste', acc: 'accessoire' };
+  const BASE_SLOTS = ['top', 'bottom', 'dress', 'shoes'];
+  const ALL_SLOTS = ['top', 'bottom', 'dress', 'outer', 'shoes', 'acc'];
+  const NEUTRALS = new Set(COLORS.filter(c => c.neutral).map(c => c.id));
+
+  const isNeutral = color => NEUTRALS.has(color);
+
+  // Une pièce est disponible si elle n'est pas au lavage et respecte les filtres.
+  function eligible(item, f = {}) {
+    if (item.laundry) return false;
+    if (f.season && item.season !== f.season && item.season !== 'toutes') return false;
+    if (f.style && item.style !== f.style) return false;
+    return true;
+  }
+
+  // Neutres avec tout ; au plus 2 couleurs vives distinctes par tenue.
+  function colorsOk(pieces) {
+    const vivid = new Set(pieces.filter(Boolean).map(p => p.color).filter(c => !isNeutral(c)));
+    return vivid.size <= 2;
+  }
+
+  // Identité d'une tenue = ses pièces principales (haut/bas ou robe + chaussures).
+  const baseKey = o => BASE_SLOTS.map(s => o[s] || '-').join('|');
+  const ids = o => ALL_SLOTS.map(s => o[s]).filter(Boolean);
+  const pieces = (o, byId) => ids(o).map(id => byId[id]);
+
+  // Vérifie la structure : (1 haut + 1 bas) XOR 1 robe, + chaussures, catégories cohérentes.
+  function isValid(o, byId) {
+    const hasTB = !!o.top && !!o.bottom, hasDress = !!o.dress;
+    if (hasTB === hasDress) return false;
+    if (hasDress && (o.top || o.bottom)) return false;
+    if (!o.shoes) return false;
+    for (const s of ALL_SLOTS) if (o[s] && (!byId[o[s]] || byId[o[s]].cat !== SLOT_CAT[s])) return false;
+    return true;
+  }
+
+  function shuffle(a, rnd) {
+    for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+    return a;
+  }
+
+  /**
+   * Génère toutes les tenues possibles (une par combinaison principale, sans doublon),
+   * en excluant les combinaisons déjà refusées/sauvegardées (excluded = Set de baseKey).
+   */
+  function generate(items, f = {}, excluded = new Set(), opts = {}) {
+    const rnd = opts.random || Math.random;
+    const max = opts.max || 60;
+    const pool = {};
+    for (const c of CATS) pool[c.id] = items.filter(i => i.cat === c.id && eligible(i, f));
+
+    const bases = [];
+    for (const t of pool.haut) for (const b of pool.bas) for (const s of pool.chaussures)
+      bases.push({ top: t.id, bottom: b.id, dress: null, shoes: s.id });
+    for (const d of pool.robe) for (const s of pool.chaussures)
+      bases.push({ top: null, bottom: null, dress: d.id, shoes: s.id });
+
+    const byId = Object.fromEntries(items.map(i => [i.id, i]));
+    const out = [];
+    const seen = new Set();
+    for (const base of shuffle(bases, rnd)) {
+      const key = baseKey(base);
+      if (seen.has(key) || excluded.has(key)) continue;
+      const basePieces = pieces(base, byId);
+      if (!colorsOk(basePieces)) continue;
+      seen.add(key);
+      const o = { ...base, outer: null, acc: null };
+      // Pièces optionnelles : une veste (souvent, toujours en hiver) et parfois un accessoire.
+      const wantOuter = f.season === 'hiver' || rnd() < 0.5;
+      const wantAcc = rnd() < 0.5;
+      if (wantOuter) {
+        const c = shuffle(pool.veste.filter(v => colorsOk([...basePieces, v])), rnd)[0];
+        if (c) o.outer = c.id;
+      }
+      if (wantAcc) {
+        const cur = pieces(o, byId);
+        const c = shuffle(pool.accessoire.filter(a => colorsOk([...cur, a])), rnd)[0];
+        if (c) o.acc = c.id;
+      }
+      out.push(o);
+      if (out.length >= max) break;
+    }
+    return out;
+  }
+
+  /**
+   * Remplace la pièce d'un emplacement par la suivante compatible (rotation),
+   * sans toucher au reste. Renvoie la nouvelle tenue ou null.
+   */
+  function replace(o, slot, items, f = {}, excluded = new Set()) {
+    const byId = Object.fromEntries(items.map(i => [i.id, i]));
+    const others = ALL_SLOTS.filter(s => s !== slot).map(s => byId[o[s]]).filter(Boolean);
+    const cands = items
+      .filter(i => i.cat === SLOT_CAT[slot] && eligible(i, f))
+      .filter(i => colorsOk([...others, i]))
+      .filter(i => !BASE_SLOTS.includes(slot) || !excluded.has(baseKey({ ...o, [slot]: i.id })))
+      .sort((a, b) => a.id < b.id ? -1 : 1);
+    const cur = o[slot];
+    const rest = cands.filter(i => i.id !== cur);
+    if (!rest.length) return null;
+    const next = cands.find(i => cur && i.id > cur && i.id !== cur) || rest[0];
+    return { ...o, [slot]: next.id };
+  }
+
+  return { SLOT_CAT, BASE_SLOTS, ALL_SLOTS, eligible, colorsOk, baseKey, ids, isValid, generate, replace, isNeutral };
+})();
+
+/* ============================================================
+   État + stockage local
+   ============================================================ */
+const STORE = 'rienamemettre.v1';
+let state;
+function load() {
+  try { state = JSON.parse(localStorage.getItem(STORE)); } catch (e) { state = null; }
+  if (!state || !Array.isArray(state.items)) {
+    state = { items: demoItems(), saved: [], rejected: [], filters: { season: '', style: '' }, sort: 'cat', catFilter: '' };
+  }
+  state.deck = [];
+}
+function save() {
+  const { deck, ...persist } = state;
+  try { localStorage.setItem(STORE, JSON.stringify(persist)); }
+  catch (e) { toast('Stockage plein : supprimez quelques photos.'); }
+}
+const byId = () => Object.fromEntries(state.items.map(i => [i.id, i]));
+const excludedKeys = () => new Set([...state.rejected, ...state.saved.map(s => Engine.baseKey(s.outfit))]);
+const uid = () => 'i' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+
+// Après une modification du dressing, on retire du paquet les tenues devenues invalides.
+function pruneDeck() {
+  const m = byId();
+  state.deck = state.deck.filter(o => Engine.isValid(o, m) && Engine.ids(o).every(id => Engine.eligible(m[id], state.filters)));
+}
+
+/* ============================================================
+   Rendu
+   ============================================================ */
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+function inkFor(hex) {
+  const n = parseInt(hex.slice(1), 16), r = n >> 16, g = (n >> 8) & 255, b = n & 255;
+  return (0.299 * r + 0.587 * g + 0.114 * b) > 150 ? '#2b2622' : '#fff';
+}
+function bgStyle(item) {
+  if (item.photo) return `background-image:url('${item.photo}');color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.6)`;
+  const c = colorOf(item.color);
+  return `background:${c.hex};color:${inkFor(c.hex)}`;
+}
+
+let tab = 'dressing';
+function render() {
+  document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
+  document.querySelectorAll('section.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + tab));
+  const titles = { dressing: 'Mon dressing', generate: 'Générer', saved: 'Mes tenues' };
+  $('#title').firstChild.nodeValue = titles[tab];
+  const avail = state.items.filter(i => !i.laundry).length;
+  $('#subtitle').textContent = tab === 'saved'
+    ? `${state.saved.length} tenue${state.saved.length > 1 ? 's' : ''} sauvegardée${state.saved.length > 1 ? 's' : ''}`
+    : `${state.items.length} pièces · ${avail} disponibles`;
+  if (tab === 'dressing') renderDressing();
+  if (tab === 'generate') renderGenerate();
+  if (tab === 'saved') renderSaved();
+}
+
+function renderDressing() {
+  $('#cat-chips').innerHTML = [{ id: '', plural: 'Tout' }, ...CATS].map(c =>
+    `<button class="chip ${state.catFilter === c.id ? 'on' : ''}" data-action="cat-filter" data-v="${c.id}">${c.plural}</button>`).join('');
+  $('#sort').value = state.sort;
+  let list = state.items.filter(i => !state.catFilter || i.cat === state.catFilter);
+  const washing = list.filter(i => i.laundry).length;
+  $('#count-line').textContent = `${list.length} pièce${list.length > 1 ? 's' : ''}${washing ? ` · ${washing} au lavage` : ''}`;
+  const catIdx = id => CATS.findIndex(c => c.id === id), colIdx = id => COLORS.findIndex(c => c.id === id);
+  const groupKey = state.sort === 'cat' ? i => i.cat : i => i.color;
+  const groupIdx = state.sort === 'cat' ? catIdx : colIdx;
+  list = [...list].sort((a, b) => groupIdx(groupKey(a)) - groupIdx(groupKey(b)) || a.name.localeCompare(b.name));
+  if (!list.length) { $('#grid').innerHTML = `<p class="empty-msg" style="grid-column:1/-1">Rien ici pour l'instant.<br>Ajoutez une pièce avec le bouton ＋</p>`; return; }
+  let html = '', last = null;
+  for (const it of list) {
+    const g = groupKey(it);
+    if (g !== last) {
+      html += `<div class="group-title">${state.sort === 'cat' ? catOf(g).plural : colorOf(g).label}</div>`;
+      last = g;
+    }
+    html += `<div class="item ${it.laundry ? 'washing' : ''}" data-action="edit" data-id="${it.id}" role="button" tabindex="0">
+      <div class="swatch" style="${bgStyle(it)}">${esc(it.name)}</div>
+      ${it.laundry ? '<span class="badge-wash">Au lavage</span>' : ''}
+      <div class="meta">${labelOf(SEASONS, it.season)} · ${labelOf(STYLES, it.style)}</div>
+      <button class="wash" data-action="toggle-wash" data-id="${it.id}" aria-label="Au lavage">🧺</button>
+    </div>`;
+  }
+  $('#grid').innerHTML = html;
+}
+
+function pieceHTML(o, slot, m, interactive) {
+  const cls = 'piece p-' + slot;
+  const it = o[slot] ? m[o[slot]] : null;
+  const optional = slot === 'outer' || slot === 'acc';
+  if (!o[slot]) {
+    if (!optional) return '';
+    const txt = slot === 'outer' ? '+ Veste' : '+ Accessoire';
+    return interactive
+      ? `<button class="${cls} empty" data-action="replace" data-slot="${slot}">${txt}</button>`
+      : `<div class="${cls} empty"></div>`;
+  }
+  if (!it) return `<div class="${cls} empty">Pièce supprimée</div>`;
+  const acts = interactive ? `<div class="acts">
+      <button data-action="replace" data-slot="${slot}" aria-label="Remplacer">↻</button>
+      ${optional ? `<button data-action="remove-slot" data-slot="${slot}" aria-label="Retirer">✕</button>` : ''}
+    </div>` : '';
+  return `<div class="${cls}" style="${bgStyle(it)}">${acts}<span class="name">${esc(it.name)}</span></div>`;
+}
+const boardHTML = (o, m, interactive) =>
+  `<div class="board">${['top', 'bottom', 'dress', 'outer', 'acc', 'shoes'].map(s => pieceHTML(o, s, m, interactive)).join('')}</div>`;
+
+function renderGenerate() {
+  $('#season-chips').innerHTML = [{ id: '', label: 'Toutes saisons' }, ...SEASONS.filter(s => s.id !== 'toutes')].map(s =>
+    `<button class="chip ${state.filters.season === s.id ? 'on' : ''}" data-action="f-season" data-v="${s.id}">${s.label}</button>`).join('');
+  $('#style-chips').innerHTML = [{ id: '', label: 'Tous styles' }, ...STYLES].map(s =>
+    `<button class="chip ${state.filters.style === s.id ? 'on' : ''}" data-action="f-style" data-v="${s.id}">${s.label}</button>`).join('');
+  const m = byId();
+  const deck = state.deck;
+  $('#swipe-btns').style.visibility = deck.length ? 'visible' : 'hidden';
+  if (!deck.length) {
+    $('#deck').innerHTML = `<div class="deck-empty"><div><div style="font-size:42px">👗</div>
+      Choisissez une saison et un style,<br>puis appuyez sur <b>Générer des tenues</b>.</div></div>`;
+    return;
+  }
+  const shown = deck.slice(0, 3).reverse();
+  $('#deck').innerHTML = shown.map((o, i) => {
+    const depth = shown.length - 1 - i;
+    const cls = depth === 0 ? '' : depth === 1 ? 'behind' : 'behind2';
+    return `<div class="card ${cls}" ${depth === 0 ? 'id="top-card"' : ''}>
+      ${depth === 0 ? '<div class="stamp like">GARDER</div><div class="stamp nope">NON</div>' : ''}
+      <div class="head"><b>Tenue ${state.deckTotal - deck.length + 1}</b><small>${deck.length} à trier</small></div>
+      ${boardHTML(o, m, depth === 0)}
+    </div>`;
+  }).join('');
+  bindSwipe($('#top-card'));
+}
+
+function renderSaved() {
+  const m = byId();
+  if (!state.saved.length) { $('#saved').innerHTML = `<p class="empty-msg" style="grid-column:1/-1">Aucune tenue sauvegardée.<br>Allez dans <b>Générer</b> et appuyez sur ♥.</p>`; return; }
+  $('#saved').innerHTML = [...state.saved].reverse().map(s => {
+    const wash = Engine.ids(s.outfit).some(id => m[id] && m[id].laundry);
+    return `<div class="mini">${boardHTML(s.outfit, m, false)}
+      <div class="foot"><span>${wash ? '<span class="warn">🧺 pièce au lavage</span>' : new Date(s.date).toLocaleDateString('fr-FR')}</span>
+      <button data-action="unsave" data-id="${s.id}">Retirer</button></div></div>`;
+  }).join('');
+}
+
+/* ============================================================
+   Actions
+   ============================================================ */
+function generate() {
+  const avail = state.items.filter(i => Engine.eligible(i, state.filters));
+  state.deck = Engine.generate(state.items, state.filters, excludedKeys());
+  state.deckTotal = state.deck.length;
+  if (state.deck.length) toast(`${state.deck.length} tenue${state.deck.length > 1 ? 's' : ''} générée${state.deck.length > 1 ? 's' : ''}`);
+  else {
+    const has = c => avail.some(i => i.cat === c);
+    if (!has('chaussures')) toast('Aucune paire de chaussures disponible avec ces filtres.');
+    else if (!(has('haut') && has('bas')) && !has('robe')) toast('Il manque un haut + un bas, ou une robe, avec ces filtres.');
+    else toast('Plus de nouvelle tenue possible avec ces filtres.');
+  }
+  render();
+}
+
+function decide(liked) {
+  const o = state.deck[0];
+  if (!o) return;
+  const card = $('#top-card');
+  const finish = () => {
+    state.deck.shift();
+    if (liked) state.saved.push({ id: uid(), outfit: o, date: Date.now() });
+    else state.rejected.push(Engine.baseKey(o));
+    save();
+    toast(liked ? 'Ajoutée à Mes tenues ♥' : 'Vous ne la reverrez plus');
+    render();
+  };
+  if (card) {
+    card.style.transition = 'transform .28s ease, opacity .28s';
+    card.style.transform = `translateX(${liked ? 130 : -130}%) rotate(${liked ? 18 : -18}deg)`;
+    card.style.opacity = '0';
+    setTimeout(finish, 260);
+  } else finish();
+}
+
+function replaceSlot(slot) {
+  const o = state.deck[0];
+  const otherBases = new Set(state.deck.slice(1).map(Engine.baseKey));
+  const excluded = new Set([...excludedKeys(), ...otherBases]);
+  const next = Engine.replace(o, slot, state.items, state.filters, excluded);
+  if (!next) { toast('Aucune autre pièce compatible.'); return; }
+  state.deck[0] = next;
+  render();
+}
+
+function bindSwipe(card) {
+  if (!card) return;
+  let x0 = null, dx = 0, id = null;
+  const like = card.querySelector('.stamp.like'), nope = card.querySelector('.stamp.nope');
+  card.addEventListener('pointerdown', e => {
+    if (e.target.closest('button')) return;
+    x0 = e.clientX; dx = 0; id = e.pointerId; card.setPointerCapture(id); card.style.transition = 'none';
+  });
+  card.addEventListener('pointermove', e => {
+    if (x0 === null || e.pointerId !== id) return;
+    dx = e.clientX - x0;
+    card.style.transform = `translateX(${dx}px) rotate(${dx / 18}deg)`;
+    like.style.opacity = Math.max(0, Math.min(1, dx / 90));
+    nope.style.opacity = Math.max(0, Math.min(1, -dx / 90));
+  });
+  const end = () => {
+    if (x0 === null) return;
+    x0 = null;
+    if (Math.abs(dx) > 90) return decide(dx > 0);
+    card.style.transition = 'transform .2s'; card.style.transform = '';
+    like.style.opacity = nope.style.opacity = 0;
+  };
+  card.addEventListener('pointerup', end);
+  card.addEventListener('pointercancel', end);
+}
+
+/* ---------- feuille d'édition ---------- */
+let draft = null;
+function openSheet(html) {
+  $('#sheet').innerHTML = '<div class="grab"></div>' + html;
+  $('#sheet').classList.add('open'); $('#scrim').classList.add('open');
+}
+function closeSheet() { $('#sheet').classList.remove('open'); $('#scrim').classList.remove('open'); draft = null; }
+
+function openEditor(item) {
+  draft = item ? { ...item } : { id: null, name: '', cat: 'haut', color: 'noir', season: 'toutes', style: 'casual', laundry: false, photo: null };
+  renderEditor();
+}
+function renderEditor() {
+  const d = draft;
+  const chipRow = (list, field) => `<div class="chips" style="flex-wrap:wrap">${list.map(x =>
+    `<button class="chip ${d[field] === x.id ? 'on' : ''}" data-action="set" data-field="${field}" data-v="${x.id}">${x.label}</button>`).join('')}</div>`;
+  openSheet(`
+    <h2>${d.id ? 'Modifier la pièce' : 'Nouvelle pièce'}</h2>
+    <button class="photo-pick" data-action="pick-photo" style="${d.photo ? `background-image:url('${d.photo}');border-style:solid;color:#fff;text-shadow:0 1px 3px #000` : ''}">
+      ${d.photo ? 'Changer la photo' : '📷 Prendre ou importer une photo'}</button>
+    ${d.photo ? '<button class="sw-name" data-action="clear-photo" style="margin-bottom:6px">Retirer la photo</button>' : ''}
+    <div class="label">Nom</div>
+    <input class="text" id="f-name" placeholder="ex : Chemise en lin" value="${esc(d.name)}" maxlength="40">
+    <div class="label">Catégorie</div>${chipRow(CATS, 'cat')}
+    <div class="label">Couleur principale · <span style="text-transform:none">${colorOf(d.color).label}${Engine.isNeutral(d.color) ? ' (neutre)' : ' (vive)'}</span></div>
+    <div class="swatches">${COLORS.map(c => `<button class="sw ${d.color === c.id ? 'on' : ''}" style="background:${c.hex}" data-action="set" data-field="color" data-v="${c.id}" aria-label="${c.label}"></button>`).join('')}</div>
+    <div class="label">Saison</div>${chipRow(SEASONS, 'season')}
+    <div class="label">Style</div>${chipRow(STYLES, 'style')}
+    <label class="row" style="margin-top:10px"><input type="checkbox" id="f-wash" ${d.laundry ? 'checked' : ''}> Au lavage (exclue des tenues)</label>
+    <div class="actions">
+      ${d.id ? '<button class="btn-danger" data-action="delete">Supprimer</button>' : '<button class="btn-ghost" data-action="close-sheet">Annuler</button>'}
+      <button class="btn-main" data-action="save-item">Enregistrer</button>
+    </div>`);
+}
+function syncDraftInputs() {
+  if (!draft) return;
+  const n = $('#f-name'), w = $('#f-wash');
+  if (n) draft.name = n.value;
+  if (w) draft.laundry = w.checked;
+}
+function saveItem() {
+  syncDraftInputs();
+  const d = draft;
+  if (!d.name.trim()) d.name = `${catOf(d.cat).label} ${colorOf(d.color).label.toLowerCase()}`;
+  d.name = d.name.trim();
+  if (d.id) state.items = state.items.map(i => i.id === d.id ? d : i);
+  else { d.id = uid(); state.items.push(d); }
+  pruneDeck(); save(); closeSheet();
+  toast(`« ${d.name} » enregistrée`);
+  render();
+}
+
+function resizePhoto(file) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const max = 480, k = Math.min(1, max / Math.max(img.width, img.height));
+        const cv = document.createElement('canvas');
+        cv.width = Math.round(img.width * k); cv.height = Math.round(img.height * k);
+        cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+        res(cv.toDataURL('image/jpeg', 0.78));
+      };
+      img.onerror = rej; img.src = r.result;
+    };
+    r.onerror = rej; r.readAsDataURL(file);
+  });
+}
+
+/* ---------- réglages & tests automatiques ---------- */
+function openSettings(results) {
+  openSheet(`
+    <h2>Réglages</h2>
+    <button class="primary" data-action="run-tests">▶ Lancer les tests automatiques</button>
+    ${results ? `<ul class="tests" style="padding-left:18px">${results.map(r =>
+      `<li class="${r.ok ? 'ok' : 'ko'}">${r.ok ? '✔' : '✘'} ${r.name}<small>${r.detail}</small></li>`).join('')}</ul>` : ''}
+    <div class="actions" style="flex-direction:column">
+      <button class="btn-ghost" data-action="reset-rejected">Réafficher les tenues refusées (${state.rejected.length})</button>
+      <button class="btn-ghost" data-action="reset-demo">Recharger les 15 pièces de démo</button>
+    </div>`);
+}
+
+function runTests() {
+  const R = [];
+  const t = (name, ok, detail) => R.push({ name, ok, detail });
+  const mk = (id, cat, color = 'noir', season = 'toutes', style = 'casual') => ({ id, name: id, cat, color, season, style, laundry: false, photo: null });
+  const all = (items, f, ex) => Engine.generate(items, f, ex, { max: 10000 });
+
+  // 1. 3 hauts × 2 bas × 2 chaussures = 12 max, sans doublon
+  const w1 = [mk('h1', 'haut', 'blanc'), mk('h2', 'haut', 'gris'), mk('h3', 'haut', 'noir'),
+              mk('b1', 'bas', 'denim'), mk('b2', 'bas', 'beige'), mk('s1', 'chaussures', 'blanc'), mk('s2', 'chaussures', 'noir')];
+  let maxN = 0, dup = false;
+  for (let k = 0; k < 30; k++) {
+    const g = all(w1);
+    maxN = Math.max(maxN, g.length);
+    if (new Set(g.map(o => Engine.ids(o).sort().join())).size !== g.length) dup = true;
+  }
+  t('3 hauts + 2 bas + 2 chaussures → 12 tenues max, sans doublon', maxN === 12 && !dup, `${maxN} tenues générées, doublons : ${dup ? 'oui' : 'non'}`);
+
+  // 2. Structure : jamais 2 hauts, 2 bas, ni robe + bas
+  const demo = demoItems(), dm = Object.fromEntries(demo.map(i => [i.id, i]));
+  let bad = 0, n2 = 0;
+  for (let k = 0; k < 30; k++) for (const o of all(demo)) {
+    n2++;
+    const cats = Engine.ids(o).map(id => dm[id].cat);
+    const count = c => cats.filter(x => x === c).length;
+    if (!Engine.isValid(o, dm) || count('haut') > 1 || count('bas') > 1 || (count('robe') && count('bas')) || count('chaussures') !== 1) bad++;
+  }
+  t('Aucune tenue avec 2 hauts, 2 bas ou robe + bas', bad === 0, `${n2} tenues vérifiées, ${bad} invalide(s)`);
+
+  // 3. Lavage
+  const w3 = demoItems(); w3.find(i => i.id === 'd1').laundry = true; w3.find(i => i.id === 'd12').laundry = true;
+  let seenWash = 0;
+  for (let k = 0; k < 30; k++) for (const o of all(w3)) {
+    if (Engine.ids(o).some(id => id === 'd1' || id === 'd12')) seenWash++;
+    for (const s of Engine.ALL_SLOTS) { const r = Engine.replace(o, s, w3); if (r && (r[s] === 'd1' || r[s] === 'd12')) seenWash++; }
+  }
+  t('Une pièce au lavage n\'apparaît dans aucune plaquette', seenWash === 0, `T-shirt blanc + baskets au lavage : ${seenWash} apparition(s), y compris via « Remplacer »`);
+
+  // 4. Filtre été
+  let winter = 0;
+  for (let k = 0; k < 30; k++) for (const o of all(demo, { season: 'ete' })) {
+    if (Engine.ids(o).some(id => dm[id].season === 'hiver')) winter++;
+    for (const s of Engine.ALL_SLOTS) { const r = Engine.replace(o, s, demo, { season: 'ete' }); if (r && dm[r[s]].season === 'hiver') winter++; }
+  }
+  t('Filtre « été » : aucun manteau d\'hiver', winter === 0, `${winter} pièce(s) d'hiver trouvée(s)`);
+
+  // 5. Tenue refusée
+  const first = all(demo)[0], rej = new Set([Engine.baseKey(first)]);
+  let back = 0;
+  for (let k = 0; k < 30; k++) {
+    const g = all(demo, {}, rej);
+    if (g.some(o => rej.has(Engine.baseKey(o)))) back++;
+    for (const o of g) for (const s of Engine.BASE_SLOTS) { const r = Engine.replace(o, s, demo, {}, rej); if (r && rej.has(Engine.baseKey(r))) back++; }
+  }
+  t('Une tenue refusée ne réapparaît jamais', back === 0, `30 générations + remplacements : ${back} réapparition(s)`);
+
+  // 6. Nouvelle pièce utilisable tout de suite
+  const w6 = [...demoItems(), mk('nouveau', 'haut', 'marine')];
+  const used = all(w6).some(o => o.top === 'nouveau');
+  t('Une pièce ajoutée est utilisée à la génération suivante', used, used ? 'le nouveau haut apparaît dans les tenues' : 'nouveau haut absent');
+
+  // Bonus : règle des couleurs
+  const w7 = [mk('r', 'haut', 'rouge'), mk('v', 'bas', 'vert'), mk('j', 'chaussures', 'jaune'), mk('n', 'chaussures', 'noir'), mk('o', 'accessoire', 'orange'), mk('k', 'veste', 'rose')];
+  const w7m = Object.fromEntries(w7.map(i => [i.id, i]));
+  let tooMany = 0, total7 = 0;
+  for (let k = 0; k < 30; k++) for (const o of all(w7)) { total7++; if (!Engine.colorsOk(Engine.ids(o).map(id => w7m[id]))) tooMany++; }
+  t('Bonus : maximum 2 couleurs vives par tenue', tooMany === 0 && total7 > 0, `${tooMany} tenue(s) avec 3+ couleurs vives`);
+
+  // Contrôle sur le dressing réel de l'utilisateur
+  const m = byId();
+  const real = all(state.items, state.filters, excludedKeys());
+  const realBad = real.filter(o => !Engine.isValid(o, m) || Engine.ids(o).some(id => m[id].laundry) || !Engine.colorsOk(Engine.ids(o).map(id => m[id])));
+  t('Votre dressing actuel', realBad.length === 0, `${real.length} tenue(s) possibles avec les filtres actuels, ${realBad.length} invalide(s)`);
+  return R;
+}
+
+/* ---------- toast ---------- */
+let toastTimer;
+function toast(msg) {
+  const el = $('#toast'); el.textContent = msg; el.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 2200);
+}
+
+/* ---------- délégation d'événements ---------- */
+document.addEventListener('click', e => {
+  const tabBtn = e.target.closest('[data-tab]');
+  if (tabBtn) { tab = tabBtn.dataset.tab; window.scrollTo(0, 0); render(); return; }
+  const el = e.target.closest('[data-action]');
+  if (!el) return;
+  const a = el.dataset.action, v = el.dataset.v;
+  switch (a) {
+    case 'add': openEditor(null); break;
+    case 'edit': openEditor(state.items.find(i => i.id === el.dataset.id)); break;
+    case 'toggle-wash': {
+      e.stopPropagation();
+      const it = state.items.find(i => i.id === el.dataset.id);
+      it.laundry = !it.laundry; pruneDeck(); save();
+      toast(it.laundry ? `« ${it.name} » au lavage` : `« ${it.name} » de retour`);
+      render(); break;
+    }
+    case 'cat-filter': state.catFilter = v; save(); render(); break;
+    case 'f-season': state.filters.season = v; state.deck = []; save(); render(); break;
+    case 'f-style': state.filters.style = v; state.deck = []; save(); render(); break;
+    case 'generate': generate(); break;
+    case 'like': decide(true); break;
+    case 'nope': decide(false); break;
+    case 'replace': replaceSlot(el.dataset.slot); break;
+    case 'remove-slot': state.deck[0] = { ...state.deck[0], [el.dataset.slot]: null }; render(); break;
+    case 'unsave': state.saved = state.saved.filter(s => s.id !== el.dataset.id); save(); render(); break;
+    case 'close-sheet': closeSheet(); break;
+    case 'set': syncDraftInputs(); draft[el.dataset.field] = v; renderEditor(); break;
+    case 'pick-photo': syncDraftInputs(); $('#file').click(); break;
+    case 'clear-photo': syncDraftInputs(); draft.photo = null; renderEditor(); break;
+    case 'save-item': saveItem(); break;
+    case 'delete':
+      if (confirm(`Supprimer « ${draft.name} » ?`)) {
+        state.items = state.items.filter(i => i.id !== draft.id);
+        pruneDeck(); save(); closeSheet(); toast('Pièce supprimée'); render();
+      }
+      break;
+    case 'open-settings': openSettings(); break;
+    case 'run-tests': openSettings(runTests()); break;
+    case 'reset-rejected': state.rejected = []; save(); toast('Tenues refusées réinitialisées'); openSettings(); break;
+    case 'reset-demo':
+      if (confirm('Remplacer votre dressing par les 15 pièces de démo ?')) {
+        state.items = demoItems(); state.saved = []; state.rejected = []; state.deck = [];
+        save(); closeSheet(); render(); toast('Démo rechargée');
+      }
+      break;
+  }
+});
+$('#sort').addEventListener('change', e => { state.sort = e.target.value; save(); render(); });
+$('#file').addEventListener('change', async e => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f || !draft) return;
+  try { draft.photo = await resizePhoto(f); renderEditor(); } catch (err) { toast('Image illisible'); }
+});
+document.addEventListener('keydown', e => {
+  if (tab !== 'generate' || $('#sheet').classList.contains('open') || !state.deck.length) return;
+  if (e.key === 'ArrowRight') decide(true);
+  if (e.key === 'ArrowLeft') decide(false);
+});
+
+load();
+render();
+</script>
+</body>
+</html>
