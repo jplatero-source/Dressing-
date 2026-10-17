@@ -22,6 +22,11 @@
     --board-b: #f6f0e6;
     --dash: #d8ccbb;
     --danger-line: #efcaca;
+    /* papier des plaquettes : identique dans les deux thèmes (les photos sur fond blanc s'y fondent) */
+    --paper: #f6f0e6;
+    --paper-ink: #2e2219;
+    --paper-muted: #7d6e60;
+    --paper-line: #e2d6c4;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
@@ -77,8 +82,11 @@
   /* wardrobe grid */
   .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
   .item { position: relative; background: var(--surface); border-radius: 14px; overflow: hidden; box-shadow: var(--shadow); text-align: left; padding: 0; }
-  .item .swatch { aspect-ratio: 3/4; display: flex; align-items: flex-end; padding: 8px; font-size: 12.5px; font-weight: 600; background-size: cover; background-position: center; }
-  .item .meta { padding: 6px 8px 8px; font-size: 11.5px; color: var(--muted); }
+  .item .swatch { aspect-ratio: 3/4; max-width: 100%; display: flex; align-items: center; justify-content: center; padding: 12px; background: var(--paper); }
+  .item .swatch img, .item .swatch svg { max-width: 100%; max-height: 100%; object-fit: contain; filter: drop-shadow(0 3px 5px rgba(60,40,20,.18)); }
+  .item .swatch img { mix-blend-mode: multiply; }
+  .item .iname { padding: 7px 8px 0; font-size: 12.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .item .meta { padding: 2px 8px 8px; font-size: 11.5px; color: var(--muted); }
   .item.washing .swatch { filter: grayscale(.9) opacity(.45); }
   .item .wash {
     position: absolute; top: 6px; right: 6px; width: 30px; height: 30px; border-radius: 50%;
@@ -118,30 +126,35 @@
   }
   .card.behind { transform: scale(.95) translateY(14px); opacity: .7; pointer-events: none; }
   .card.behind2 { transform: scale(.9) translateY(28px); opacity: .4; pointer-events: none; }
-  .card .head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
-  .card .head b { font-family: Georgia, serif; font-weight: 400; font-size: 18px; }
-  .card .head small { color: var(--muted); font-size: 12px; }
-  .stamp { position: absolute; top: 28px; padding: 6px 14px; border: 3px solid; border-radius: 10px; font-weight: 800; font-size: 22px; letter-spacing: 1px; opacity: 0; z-index: 3; pointer-events: none; }
+  .card { background: var(--paper); color: var(--paper-ink); }
+  .stamp { position: absolute; top: 28px; padding: 6px 14px; border: 3px solid; border-radius: 10px; font-weight: 800; font-size: 22px; letter-spacing: 1px; opacity: 0; z-index: 3; pointer-events: none; background: var(--paper); }
   .stamp.like { left: 22px; color: var(--like); transform: rotate(-12deg); }
   .stamp.nope { right: 22px; color: var(--nope); transform: rotate(12deg); }
 
-  .board {
-    flex: 1; display: grid; gap: 10px; min-height: 0;
-    grid-template-columns: 1.35fr 1fr; grid-template-rows: repeat(6, 1fr);
-    background: repeating-linear-gradient(45deg, var(--board-a), var(--board-a) 10px, var(--board-b) 10px, var(--board-b) 20px);
-    border-radius: 12px; padding: 10px;
-  }
-  .piece { position: relative; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,.12); background-size: cover; background-position: center; display: flex; align-items: flex-end; min-height: 0; }
-  .piece .name { margin: 6px; background: rgba(255,255,255,.88); color: #2b2622; border-radius: 99px; padding: 3px 9px; font-size: 12px; font-weight: 600; max-width: calc(100% - 12px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .piece .acts { position: absolute; top: 5px; right: 5px; display: flex; gap: 4px; }
-  .piece .acts button { width: 30px; height: 30px; border-radius: 50%; background: rgba(255,255,255,.9); color: #2b2622; font-size: 15px; display: grid; place-items: center; box-shadow: 0 2px 6px rgba(0,0,0,.15); }
-  .piece.empty { background: transparent; box-shadow: none; border: 2px dashed var(--dash); align-items: center; justify-content: center; color: var(--muted); font-size: 12.5px; }
-  .p-top { grid-column: 1; grid-row: 1 / 4; transform: rotate(-1.5deg); }
-  .p-bottom { grid-column: 1; grid-row: 4 / 7; transform: rotate(1deg); }
-  .p-dress { grid-column: 1; grid-row: 1 / 7; transform: rotate(-1deg); }
-  .p-outer { grid-column: 2; grid-row: 1 / 3; transform: rotate(2deg); }
-  .p-acc { grid-column: 2; grid-row: 3 / 5; transform: rotate(-2deg); }
-  .p-shoes { grid-column: 2; grid-row: 5 / 7; transform: rotate(1.5deg); }
+  /* plaquette façon lookbook : papier crème, pièces détourées, palette en bas */
+  .plaq { flex: 1; display: flex; flex-direction: column; min-height: 0; gap: 8px; color: var(--paper-ink); }
+  .plaq-head { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; }
+  .plaq-num { width: 34px; height: 34px; border-radius: 50%; background: var(--paper-ink); color: var(--paper); display: grid; place-items: center; font-family: Georgia, serif; font-size: 18px; }
+  .plaq-title { font-family: Georgia, "Times New Roman", serif; font-size: 17px; text-transform: uppercase; letter-spacing: .4px; line-height: 1.1; }
+  .plaq-title small { display: block; font: italic 12.5px/1.3 Georgia, serif; text-transform: none; letter-spacing: 0; color: var(--paper-muted); margin-top: 2px; }
+  .plaq-count { font-size: 11.5px; color: var(--paper-muted); white-space: nowrap; }
+  .board { flex: 1; display: grid; gap: 8px 12px; min-height: 0; grid-template-columns: 1.25fr 1fr; grid-template-rows: repeat(6, 1fr); border-top: 1px solid var(--paper-line); padding-top: 10px; }
+  .piece { position: relative; display: flex; flex-direction: column; align-items: center; min-height: 0; min-width: 0; }
+  .piece .vis { flex: 1; min-height: 0; width: 100%; display: flex; align-items: center; justify-content: center; }
+  .piece img, .piece svg { max-width: 100%; max-height: 100%; width: auto; height: 100%; object-fit: contain; filter: drop-shadow(0 4px 6px rgba(60,40,20,.18)); }
+  .piece img { mix-blend-mode: multiply; }
+  .piece .name { font-size: 11px; color: var(--paper-muted); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-top: 2px; }
+  .piece .acts { position: absolute; top: 0; right: 0; display: flex; gap: 4px; z-index: 2; }
+  .piece .acts button { width: 30px; height: 30px; border-radius: 50%; background: var(--paper); color: var(--paper-ink); font-size: 15px; display: grid; place-items: center; box-shadow: 0 2px 6px rgba(0,0,0,.18); }
+  .piece.empty { border: 2px dashed var(--paper-line); border-radius: 12px; justify-content: center; color: var(--paper-muted); font-size: 12.5px; }
+  .p-top { grid-column: 1; grid-row: 1 / 4; }
+  .p-bottom { grid-column: 1; grid-row: 4 / 7; }
+  .p-dress { grid-column: 1; grid-row: 1 / 7; }
+  .p-outer { grid-column: 2; grid-row: 1 / 3; }
+  .p-acc { grid-column: 2; grid-row: 3 / 5; }
+  .p-shoes { grid-column: 2; grid-row: 5 / 7; }
+  .palette { display: flex; justify-content: center; gap: 10px; padding-top: 4px; }
+  .palette i { width: 26px; height: 26px; border-radius: 50%; border: 1px solid rgba(0,0,0,.12); box-shadow: inset 0 -3px 6px rgba(0,0,0,.12); }
 
   .swipe-btns { display: flex; justify-content: center; gap: 28px; margin-bottom: 8px; }
   .swipe-btns button { width: 58px; height: 58px; border-radius: 50%; background: var(--surface); box-shadow: var(--shadow); font-size: 28px; }
@@ -152,9 +165,14 @@
   /* saved */
   .saved-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .mini { background: var(--surface); border-radius: 14px; box-shadow: var(--shadow); padding: 8px; position: relative; }
-  .mini .board { height: 220px; padding: 6px; gap: 6px; }
-  .mini .piece .name { font-size: 10px; padding: 2px 6px; margin: 4px; }
-  .mini .foot { display: flex; justify-content: space-between; align-items: center; padding: 6px 2px 0; font-size: 12px; color: var(--muted); }
+  .mini { background: var(--paper); color: var(--paper-ink); }
+  .mini .plaq { height: 300px; gap: 6px; }
+  .mini .plaq-num { width: 24px; height: 24px; font-size: 13px; }
+  .mini .plaq-title { font-size: 12px; }
+  .mini .plaq-title small, .mini .piece .name, .mini .plaq-count { display: none; }
+  .mini .palette i { width: 16px; height: 16px; }
+  .mini .board { gap: 4px 6px; padding-top: 6px; }
+  .mini .foot { display: flex; justify-content: space-between; align-items: center; padding: 6px 2px 0; font-size: 12px; color: var(--paper-muted); }
   .mini .foot button { color: var(--nope); font-size: 12px; }
   .warn { color: var(--accent); font-weight: 600; }
   .empty-msg { text-align: center; color: var(--muted); padding: 40px 20px; }
@@ -170,7 +188,10 @@
   .sheet.open { transform: none; }
   .grab { width: 40px; height: 5px; border-radius: 3px; background: var(--line); margin: 0 auto 10px; }
   .sheet h2 { font-family: Georgia, serif; font-weight: 400; margin: 0 0 10px; font-size: 22px; }
-  .photo-pick { width: 100%; aspect-ratio: 16/10; border-radius: 14px; border: 2px dashed var(--line); display: grid; place-items: center; color: var(--muted); background-size: cover; background-position: center; margin-bottom: 8px; font-weight: 600; }
+  .photo-pick { width: 100%; max-width: 100%; aspect-ratio: 16/10; border-radius: 14px; border: 2px dashed var(--line); display: grid; place-items: center; color: var(--muted); margin-bottom: 8px; font-weight: 600; cursor: pointer; position: relative; overflow: hidden; }
+  .photo-pick.has { background: var(--paper); border-style: solid; }
+  .photo-pick img { max-width: 100%; max-height: 100%; object-fit: contain; mix-blend-mode: multiply; }
+  .photo-pick span { position: absolute; bottom: 8px; background: var(--paper-ink); color: var(--paper); font-size: 12px; padding: 4px 10px; border-radius: 99px; }
   input.text { width: 100%; border: 1px solid var(--line); border-radius: 12px; padding: 12px; font: inherit; background: var(--bg); color: var(--ink); }
   .swatches { display: flex; flex-wrap: wrap; gap: 8px; padding: 4px 0 6px; }
   .sw { width: 36px; height: 36px; border-radius: 50%; border: 2px solid rgba(0,0,0,.08); position: relative; }
@@ -186,6 +207,8 @@
   .tests .ko { color: var(--nope); }
   .tests small { color: var(--muted); display: block; }
 
+  .vh { position: fixed; left: -9999px; width: 1px; height: 1px; opacity: 0; }
+  .import-btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); font-size: 13.5px; cursor: pointer; }
   .toast {
     position: fixed; left: 50%; bottom: 100px; transform: translate(-50%, 20px); opacity: 0; z-index: 30;
     background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 12px; font-size: 14px;
@@ -204,7 +227,7 @@
   <section class="view active" id="view-dressing">
     <div class="chips" id="cat-chips"></div>
     <div class="row between" style="margin-bottom:10px">
-      <span class="sw-name" id="count-line"></span>
+      <label for="files-bulk" class="import-btn">📷 Importer des photos</label>
       <label class="row" style="gap:6px"><span class="sw-name">Trier par</span>
         <select class="sort" id="sort">
           <option value="cat">Catégorie</option>
@@ -212,6 +235,7 @@
         </select>
       </label>
     </div>
+    <p class="sw-name" id="count-line" style="margin:0 0 8px"></p>
     <div class="grid" id="grid"></div>
     <button class="fab" data-action="add">＋ Ajouter</button>
   </section>
@@ -244,7 +268,8 @@
 <div class="scrim" id="scrim" data-action="close-sheet"></div>
 <div class="sheet" id="sheet"></div>
 <div class="toast" id="toast"></div>
-<input type="file" id="file" accept="image/*" hidden>
+<input type="file" id="file" accept="image/*" class="vh">
+<input type="file" id="files-bulk" accept="image/*" multiple class="vh">
 
 <script>
 /* ============================================================
@@ -272,7 +297,9 @@ const COLORS = [
   { id: 'vert',   label: 'Vert',   hex: '#4f9a5c' },
   { id: 'bleu',   label: 'Bleu',   hex: '#3b7ed6' },
   { id: 'violet', label: 'Violet', hex: '#8a5cc7' },
-  { id: 'marron', label: 'Marron', hex: '#86583a' },
+  { id: 'marron', label: 'Marron', hex: '#6e4a33' },
+  { id: 'kaki',   label: 'Kaki',   hex: '#5e6440' },
+  { id: 'bordeaux', label: 'Bordeaux', hex: '#6e2232' },
 ];
 const SEASONS = [
   { id: 'ete', label: 'Été' }, { id: 'mi', label: 'Mi-saison' },
@@ -447,14 +474,19 @@ function pruneDeck() {
    ============================================================ */
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-function inkFor(hex) {
-  const n = parseInt(hex.slice(1), 16), r = n >> 16, g = (n >> 8) & 255, b = n & 255;
-  return (0.299 * r + 0.587 * g + 0.114 * b) > 150 ? '#2b2622' : '#fff';
-}
-function bgStyle(item) {
-  if (item.photo) return `background-image:url('${item.photo}');color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.6)`;
+// Silhouettes dessinées pour les pièces sans photo (données de démo).
+const SHAPES = {
+  haut: '<path d="M32 12 L43 8 Q50 17 57 8 L68 12 L90 30 L81 43 L71 37 L71 92 L29 92 L29 37 L19 43 L10 30 Z"/>',
+  bas: '<path d="M31 6 L69 6 L73 94 L56 94 L50 32 L44 94 L27 94 Z"/>',
+  robe: '<path d="M40 5 L45 5 L47 14 L53 14 L55 5 L60 5 L62 22 L57 34 L80 94 L20 94 L43 34 L38 22 Z"/>',
+  veste: '<path d="M31 7 L42 5 L50 30 L58 5 L69 7 L91 27 L84 72 L76 68 L76 96 L24 96 L24 68 L16 72 L9 27 Z"/><path d="M50 30 L50 96" fill="none" stroke-width="1.5"/>',
+  chaussures: '<path d="M22 20 L44 20 L45 58 Q62 60 78 66 Q91 71 91 82 L91 88 L17 88 L17 78 Z"/>',
+  accessoire: '<path d="M36 40 Q36 16 50 16 Q64 16 64 40" fill="none" stroke-width="5"/><path d="M20 38 L80 38 L86 90 L14 90 Z"/>',
+};
+function visual(item) {
+  if (item.photo) return `<img src="${item.photo}" alt="${esc(item.name)}">`;
   const c = colorOf(item.color);
-  return `background:${c.hex};color:${inkFor(c.hex)}`;
+  return `<svg viewBox="0 0 100 100" role="img" aria-label="${esc(item.name)}" fill="${c.hex}" stroke="rgba(40,25,10,.35)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round">${SHAPES[item.cat] || SHAPES.haut}</svg>`;
 }
 
 let tab = 'dressing';
@@ -492,7 +524,8 @@ function renderDressing() {
       last = g;
     }
     html += `<div class="item ${it.laundry ? 'washing' : ''}" data-action="edit" data-id="${it.id}" role="button" tabindex="0">
-      <div class="swatch" style="${bgStyle(it)}">${esc(it.name)}</div>
+      <div class="swatch">${visual(it)}</div>
+      <div class="iname">${esc(it.name)}</div>
       ${it.laundry ? '<span class="badge-wash">Au lavage</span>' : ''}
       <div class="meta">${labelOf(SEASONS, it.season)} · ${labelOf(STYLES, it.style)}</div>
       <button class="wash" data-action="toggle-wash" data-id="${it.id}" aria-label="Au lavage">🧺</button>
@@ -517,10 +550,35 @@ function pieceHTML(o, slot, m, interactive) {
       <button data-action="replace" data-slot="${slot}" aria-label="Remplacer">↻</button>
       ${optional ? `<button data-action="remove-slot" data-slot="${slot}" aria-label="Retirer">✕</button>` : ''}
     </div>` : '';
-  return `<div class="${cls}" style="${bgStyle(it)}">${acts}<span class="name">${esc(it.name)}</span></div>`;
+  return `<div class="${cls}">${acts}<div class="vis">${visual(it)}</div><span class="name">${esc(it.name)}</span></div>`;
 }
-const boardHTML = (o, m, interactive) =>
-  `<div class="board">${['top', 'bottom', 'dress', 'outer', 'acc', 'shoes'].map(s => pieceHTML(o, s, m, interactive)).join('')}</div>`;
+// Nom et accroche de la plaquette, choisis selon le style dominant (stables pour une même tenue).
+const LOOKS = {
+  chic: [['Le Classique', 'Intemporel et élégant.'], ["L'Intemporel", 'Chic en toutes occasions.'], ["L'Élégant décontracté", 'Chic sans effort.'], ['Le City Heritage', 'Esprit maison de campagne.']],
+  casual: [['Le Smart Casual', 'Sobre et moderne.'], ['Le Moderne', 'Simple et raffiné.'], ['Le Week-end', 'Confort au quotidien.'], ['Le Décontracté', 'Facile à porter.']],
+  sport: [["L'Athlétique", 'Prêt à bouger.'], ['Le Sport chic', 'Sportif, mais soigné.'], ["L'Actif", 'Léger et pratique.']],
+};
+function lookName(o, m) {
+  const ps = Engine.ids(o).map(id => m[id]).filter(Boolean);
+  const count = {};
+  ps.forEach(p => count[p.style] = (count[p.style] || 0) + 1);
+  const style = Object.keys(count).sort((a, b) => count[b] - count[a])[0] || 'casual';
+  const list = LOOKS[style] || LOOKS.casual;
+  let h = 0;
+  for (const ch of Engine.baseKey(o)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return list[h % list.length];
+}
+function boardHTML(o, m, interactive, num, count) {
+  const [title, tagline] = lookName(o, m);
+  const colors = [...new Set(Engine.ids(o).map(id => m[id]).filter(Boolean).map(p => p.color))];
+  return `<div class="plaq">
+    <div class="plaq-head"><span class="plaq-num">${num}</span>
+      <div class="plaq-title">${esc(title)}<small>${esc(tagline)}</small></div>
+      ${count ? `<span class="plaq-count">${count}</span>` : '<span></span>'}</div>
+    <div class="board">${['top', 'bottom', 'dress', 'outer', 'acc', 'shoes'].map(s => pieceHTML(o, s, m, interactive)).join('')}</div>
+    <div class="palette">${colors.map(c => `<i style="background:${colorOf(c).hex}" title="${colorOf(c).label}"></i>`).join('')}</div>
+  </div>`;
+}
 
 function renderGenerate() {
   $('#season-chips').innerHTML = [{ id: '', label: 'Toutes saisons' }, ...SEASONS.filter(s => s.id !== 'toutes')].map(s =>
@@ -541,8 +599,7 @@ function renderGenerate() {
     const cls = depth === 0 ? '' : depth === 1 ? 'behind' : 'behind2';
     return `<div class="card ${cls}" ${depth === 0 ? 'id="top-card"' : ''}>
       ${depth === 0 ? '<div class="stamp like">GARDER</div><div class="stamp nope">NON</div>' : ''}
-      <div class="head"><b>Tenue ${state.deckTotal - deck.length + 1}</b><small>${deck.length} à trier</small></div>
-      ${boardHTML(o, m, depth === 0)}
+      ${boardHTML(o, m, depth === 0, state.deckTotal - deck.length + 1 + depth, `${deck.length} à trier`)}
     </div>`;
   }).join('');
   bindSwipe($('#top-card'));
@@ -551,9 +608,9 @@ function renderGenerate() {
 function renderSaved() {
   const m = byId();
   if (!state.saved.length) { $('#saved').innerHTML = `<p class="empty-msg" style="grid-column:1/-1">Aucune tenue sauvegardée.<br>Allez dans <b>Générer</b> et appuyez sur ♥.</p>`; return; }
-  $('#saved').innerHTML = [...state.saved].reverse().map(s => {
+  $('#saved').innerHTML = [...state.saved].reverse().map((s, i) => {
     const wash = Engine.ids(s.outfit).some(id => m[id] && m[id].laundry);
-    return `<div class="mini">${boardHTML(s.outfit, m, false)}
+    return `<div class="mini">${boardHTML(s.outfit, m, false, state.saved.length - i)}
       <div class="foot"><span>${wash ? '<span class="warn">🧺 pièce au lavage</span>' : new Date(s.date).toLocaleDateString('fr-FR')}</span>
       <button data-action="unsave" data-id="${s.id}">Retirer</button></div></div>`;
   }).join('');
@@ -638,10 +695,19 @@ function openSheet(html) {
   $('#sheet').innerHTML = '<div class="grab"></div>' + html;
   $('#sheet').classList.add('open'); $('#scrim').classList.add('open');
 }
-function closeSheet() { $('#sheet').classList.remove('open'); $('#scrim').classList.remove('open'); draft = null; }
+function closeSheet() { $('#sheet').classList.remove('open'); $('#scrim').classList.remove('open'); draft = null; queue = []; }
 
+// File d'attente des photos importées en lot : une fiche à compléter par photo.
+let queue = [], queueTotal = 0;
+const blankItem = () => ({ id: null, name: '', cat: 'haut', color: 'noir', season: 'toutes', style: 'casual', laundry: false, photo: null });
 function openEditor(item) {
-  draft = item ? { ...item } : { id: null, name: '', cat: 'haut', color: 'noir', season: 'toutes', style: 'casual', laundry: false, photo: null };
+  draft = item ? { ...item } : blankItem();
+  renderEditor();
+}
+function openQueued() {
+  const next = queue.shift();
+  draft = { ...blankItem(), photo: next.photo, color: next.color };
+  draft.step = queueTotal - queue.length;
   renderEditor();
 }
 function renderEditor() {
@@ -649,9 +715,9 @@ function renderEditor() {
   const chipRow = (list, field) => `<div class="chips" style="flex-wrap:wrap">${list.map(x =>
     `<button class="chip ${d[field] === x.id ? 'on' : ''}" data-action="set" data-field="${field}" data-v="${x.id}">${x.label}</button>`).join('')}</div>`;
   openSheet(`
-    <h2>${d.id ? 'Modifier la pièce' : 'Nouvelle pièce'}</h2>
-    <button class="photo-pick" data-action="pick-photo" style="${d.photo ? `background-image:url('${d.photo}');border-style:solid;color:#fff;text-shadow:0 1px 3px #000` : ''}">
-      ${d.photo ? 'Changer la photo' : '📷 Prendre ou importer une photo'}</button>
+    <h2>${d.id ? 'Modifier la pièce' : d.step ? `Pièce ${d.step} sur ${queueTotal}` : 'Nouvelle pièce'}</h2>
+    <label for="file" class="photo-pick ${d.photo ? 'has' : ''}" data-action="pick-photo">
+      ${d.photo ? `<img src="${d.photo}" alt=""><span>Changer la photo</span>` : '📷 Prendre ou importer une photo'}</label>
     ${d.photo ? '<button class="sw-name" data-action="clear-photo" style="margin-bottom:6px">Retirer la photo</button>' : ''}
     <div class="label">Nom</div>
     <input class="text" id="f-name" placeholder="ex : Chemise en lin" value="${esc(d.name)}" maxlength="40">
@@ -662,8 +728,10 @@ function renderEditor() {
     <div class="label">Style</div>${chipRow(STYLES, 'style')}
     <label class="row" style="margin-top:10px"><input type="checkbox" id="f-wash" ${d.laundry ? 'checked' : ''}> Au lavage (exclue des tenues)</label>
     <div class="actions">
-      ${d.id ? '<button class="btn-danger" data-action="delete">Supprimer</button>' : '<button class="btn-ghost" data-action="close-sheet">Annuler</button>'}
-      <button class="btn-main" data-action="save-item">Enregistrer</button>
+      ${d.id ? '<button class="btn-danger" data-action="delete">Supprimer</button>'
+        : d.step ? '<button class="btn-ghost" data-action="skip-item">Passer</button>'
+        : '<button class="btn-ghost" data-action="close-sheet">Annuler</button>'}
+      <button class="btn-main" data-action="save-item">${d.step && queue.length ? 'Enregistrer et suivante' : 'Enregistrer'}</button>
     </div>`);
 }
 function syncDraftInputs() {
@@ -677,29 +745,62 @@ function saveItem() {
   const d = draft;
   if (!d.name.trim()) d.name = `${catOf(d.cat).label} ${colorOf(d.color).label.toLowerCase()}`;
   d.name = d.name.trim();
+  delete d.step;
   if (d.id) state.items = state.items.map(i => i.id === d.id ? d : i);
   else { d.id = uid(); state.items.push(d); }
-  pruneDeck(); save(); closeSheet();
+  pruneDeck(); save();
   toast(`« ${d.name} » enregistrée`);
   render();
+  if (queue.length) openQueued(); else closeSheet();
 }
 
-function resizePhoto(file) {
+// Réduit la photo (stockage local limité) et propose la couleur la plus proche de la palette.
+function loadImage(file) {
   return new Promise((res, rej) => {
-    const r = new FileReader();
-    r.onload = () => {
-      const img = new Image();
-      img.onload = () => {
-        const max = 480, k = Math.min(1, max / Math.max(img.width, img.height));
-        const cv = document.createElement('canvas');
-        cv.width = Math.round(img.width * k); cv.height = Math.round(img.height * k);
-        cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
-        res(cv.toDataURL('image/jpeg', 0.78));
-      };
-      img.onerror = rej; img.src = r.result;
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => { URL.revokeObjectURL(url); res(img); };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      const r = new FileReader();   // repli pour les navigateurs qui refusent les blob:
+      r.onload = () => { const i2 = new Image(); i2.onload = () => res(i2); i2.onerror = rej; i2.src = r.result; };
+      r.onerror = rej; r.readAsDataURL(file);
     };
-    r.onerror = rej; r.readAsDataURL(file);
+    img.src = url;
   });
+}
+function guessColor(cv) {
+  const w = cv.width, h = cv.height, d = cv.getContext('2d').getImageData(0, 0, w, h).data;
+  const px = (x, y) => { const i = (y * w + x) * 4; return [d[i], d[i + 1], d[i + 2]]; };
+  // fond estimé à partir des coins, puis moyenne des pixels centraux qui s'en distinguent
+  const corners = [px(2, 2), px(w - 3, 2), px(2, h - 3), px(w - 3, h - 3)];
+  const bg = [0, 1, 2].map(k => corners.reduce((a, c) => a + c[k], 0) / 4);
+  let sum = [0, 0, 0], n = 0, all = [0, 0, 0], na = 0;
+  for (let y = Math.floor(h * .2); y < h * .8; y += 2) for (let x = Math.floor(w * .25); x < w * .75; x += 2) {
+    const c = px(x, y);
+    all = all.map((v, k) => v + c[k]); na++;
+    if (Math.hypot(c[0] - bg[0], c[1] - bg[1], c[2] - bg[2]) > 40) { sum = sum.map((v, k) => v + c[k]); n++; }
+  }
+  const avg = (n > na * .1 ? sum.map(v => v / n) : all.map(v => v / na));
+  let best = COLORS[0], bd = Infinity;
+  for (const c of COLORS) {
+    const v = parseInt(c.hex.slice(1), 16), rgb = [v >> 16, (v >> 8) & 255, v & 255];
+    const dist = Math.hypot(rgb[0] - avg[0], rgb[1] - avg[1], rgb[2] - avg[2]);
+    if (dist < bd) { bd = dist; best = c; }
+  }
+  return best.id;
+}
+async function resizePhoto(file) {
+  const img = await loadImage(file);
+  const max = 420, k = Math.min(1, max / Math.max(img.width, img.height));
+  const cv = document.createElement('canvas');
+  cv.width = Math.max(8, Math.round(img.width * k)); cv.height = Math.max(8, Math.round(img.height * k));
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height);
+  ctx.drawImage(img, 0, 0, cv.width, cv.height);
+  let color = 'noir';
+  try { color = guessColor(cv); } catch (e) {}
+  return { photo: cv.toDataURL('image/jpeg', 0.74), color };
 }
 
 /* ---------- réglages & tests automatiques ---------- */
@@ -825,7 +926,8 @@ document.addEventListener('click', e => {
     case 'unsave': state.saved = state.saved.filter(s => s.id !== el.dataset.id); save(); render(); break;
     case 'close-sheet': closeSheet(); break;
     case 'set': syncDraftInputs(); draft[el.dataset.field] = v; renderEditor(); break;
-    case 'pick-photo': syncDraftInputs(); $('#file').click(); break;
+    case 'pick-photo': syncDraftInputs(); break;   // le <label for="file"> ouvre le sélecteur
+    case 'skip-item': if (queue.length) openQueued(); else closeSheet(); break;
     case 'clear-photo': syncDraftInputs(); draft.photo = null; renderEditor(); break;
     case 'save-item': saveItem(); break;
     case 'delete':
@@ -851,7 +953,25 @@ $('#sort').addEventListener('change', e => { state.sort = e.target.value; save()
 $('#file').addEventListener('change', async e => {
   const f = e.target.files[0]; e.target.value = '';
   if (!f || !draft) return;
-  try { draft.photo = await resizePhoto(f); renderEditor(); } catch (err) { toast('Image illisible'); }
+  try {
+    const { photo, color } = await resizePhoto(f);
+    syncDraftInputs();
+    draft.photo = photo;
+    if (!draft.id) draft.color = color;   // couleur proposée, modifiable
+    renderEditor();
+  } catch (err) { toast('Cette image ne peut pas être lue. Essayez une photo JPEG ou PNG.'); }
+});
+$('#files-bulk').addEventListener('change', async e => {
+  const files = [...e.target.files]; e.target.value = '';
+  if (!files.length) return;
+  toast(`Préparation de ${files.length} photo${files.length > 1 ? 's' : ''}…`);
+  queue = [];
+  for (const f of files) {
+    try { queue.push(await resizePhoto(f)); } catch (err) { /* photo illisible ignorée */ }
+  }
+  if (!queue.length) { toast('Aucune de ces images ne peut être lue.'); return; }
+  queueTotal = queue.length;
+  openQueued();
 });
 document.addEventListener('keydown', e => {
   if (tab !== 'generate' || $('#sheet').classList.contains('open') || !state.deck.length) return;
