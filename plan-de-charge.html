@@ -1,0 +1,937 @@
+<title>Plan de charge du cabinet</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Public+Sans:wght@400;500;600;700&family=Spectral:wght@600&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  /* Tableau annuel collaborateurs × mois au centre ; le détail d'une case s'ouvre dans un panneau latéral. */
+  :root {
+    --bg: #f3f4f8;
+    --surface: #ffffff;
+    --ink: #1c2033;
+    --muted: #5f6478;
+    --line: #dfe2ec;
+    --line-strong: #c4c8d8;
+    --accent: #34418a;
+    --accent-soft: #e6e9f6;
+    --accent-ink: #ffffff;
+    --ok: #237a4b;
+    --ok-bg: #dff1e6;
+    --warn: #9a5b00;
+    --warn-bg: #fcebcf;
+    --over: #b4231c;
+    --over-bg: #fadfdc;
+    --shadow: 0 10px 30px rgba(28, 32, 51, .16);
+    --f-display: "Spectral", Georgia, "Times New Roman", serif;
+    --f-body: "Public Sans", -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    --f-mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #12141d; --surface: #1a1d29; --ink: #e6e8f2; --muted: #9a9fb5; --line: #2a2e3f; --line-strong: #3a3f55;
+      --accent: #9aa6ee; --accent-soft: #252a45; --accent-ink: #12141d;
+      --ok: #7fd3a1; --ok-bg: #173325; --warn: #f2b55c; --warn-bg: #3a2a12; --over: #ff8f86; --over-bg: #3f1d1b;
+      --shadow: 0 10px 30px rgba(0, 0, 0, .5);
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #12141d; --surface: #1a1d29; --ink: #e6e8f2; --muted: #9a9fb5; --line: #2a2e3f; --line-strong: #3a3f55;
+    --accent: #9aa6ee; --accent-soft: #252a45; --accent-ink: #12141d;
+    --ok: #7fd3a1; --ok-bg: #173325; --warn: #f2b55c; --warn-bg: #3a2a12; --over: #ff8f86; --over-bg: #3f1d1b;
+    --shadow: 0 10px 30px rgba(0, 0, 0, .5);
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--bg); color: var(--ink); font: 14px/1.45 var(--f-body); }
+  button, input, select { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .num { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+
+  body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--surface); }
+  header.bar {
+    position: sticky; top: env(safe-area-inset-top, 0px); z-index: 8; background: var(--surface); border-bottom: 1px solid var(--line);
+    padding-block: 10px 0; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  .bar-top { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
+  .brand { font-family: var(--f-display); font-size: 22px; font-weight: 600; margin: 0 auto 0 0; letter-spacing: -.2px; }
+  .brand small { font-family: var(--f-body); font-size: 12.5px; font-weight: 400; color: var(--muted); margin-left: 8px; }
+  .lbl-inline { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; }
+  select, input[type=text], input[type=number], input[type=date] {
+    border: 1px solid var(--line-strong); background: var(--surface); border-radius: 7px; padding: 6px 8px; min-height: 34px; max-width: 100%;
+  }
+  nav.tabs { display: flex; gap: 2px; overflow-x: auto; margin-top: 8px; scrollbar-width: none; }
+  nav.tabs::-webkit-scrollbar { display: none; }
+  nav.tabs button { background: none; border: 0; border-bottom: 2px solid transparent; padding: 8px 12px 9px; color: var(--muted); font-weight: 500; white-space: nowrap; }
+  nav.tabs button.on { color: var(--ink); border-bottom-color: var(--accent); }
+
+  main { padding-block: 16px 48px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  .view[hidden] { display: none; }
+  .banner { background: var(--accent-soft); border-radius: 8px; padding: 9px 12px; margin-bottom: 12px; font-size: 13px; }
+  .banner.warn { background: var(--warn-bg); color: var(--warn); }
+  .h2 { font-family: var(--f-display); font-size: 23px; font-weight: 600; margin: 0 0 4px; text-wrap: balance; }
+  .lead { color: var(--muted); margin: 0 0 14px; max-width: 72ch; }
+
+  .btn { border: 1px solid var(--line-strong); background: var(--surface); border-radius: 7px; padding: 7px 12px; min-height: 34px; font-weight: 500; white-space: nowrap; }
+  .btn:hover { border-color: var(--accent); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .btn.small { min-height: 28px; padding: 3px 9px; font-size: 12.5px; }
+  .btn.danger { color: var(--over); }
+  .btn.ghost { border-color: transparent; background: none; }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .toolbar { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin-bottom: 12px; }
+  .toolbar .spacer { flex: 1; }
+
+  .summary { display: flex; flex-wrap: wrap; gap: 8px; }
+  .pill { display: inline-flex; align-items: baseline; gap: 6px; border-radius: 99px; padding: 5px 12px; font-size: 13px; border: 1px solid var(--line); background: var(--surface); }
+  .pill b { font-family: var(--f-mono); font-weight: 600; }
+  .pill.over { background: var(--over-bg); color: var(--over); border-color: transparent; }
+  .pill.warn { background: var(--warn-bg); color: var(--warn); border-color: transparent; }
+
+  /* tableau de charge */
+  .wrap { overflow: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+  table.load { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 12.5px; }
+  .load th, .load td { border-bottom: 1px solid var(--line); border-right: 1px solid var(--line); padding: 0; }
+  .load thead th { position: sticky; top: 0; z-index: 2; background: var(--surface); height: 34px; font-weight: 600; color: var(--muted); font-size: 12px; text-align: center; padding: 0 6px; white-space: nowrap; }
+  .load thead th small { display: block; font-weight: 400; font-family: var(--f-mono); font-size: 10.5px; }
+  .load .who { position: sticky; left: 0; z-index: 3; background: var(--surface); min-width: 170px; text-align: left; padding: 8px 10px; }
+  .load thead .who { z-index: 4; }
+  .load .who b { display: block; font-size: 13.5px; }
+  .load .who span { color: var(--muted); font-size: 11.5px; }
+  .load tr.total td { background: var(--accent-soft); }
+  .load tr.total .who { background: var(--accent-soft); }
+  .c { width: 100%; min-width: 92px; min-height: 58px; border: 0; background: none; padding: 6px 6px 7px; display: grid; gap: 3px; text-align: center; }
+  .c .hrs { font-family: var(--f-mono); font-size: 11.5px; white-space: nowrap; }
+  .c .pct { font-weight: 700; font-size: 14px; font-family: var(--f-mono); }
+  .c .bar { height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
+  .c .bar i { display: block; height: 100%; background: currentColor; }
+  .c.ok { color: var(--ok); } .c.ok .hrs { color: var(--ink); }
+  .c.warn { background: var(--warn-bg); color: var(--warn); }
+  .c.over { background: var(--over-bg); color: var(--over); }
+  .c.none { color: var(--muted); }
+  button.c:hover { box-shadow: inset 0 0 0 2px var(--accent); }
+  .c.year { background: none; cursor: default; }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 10px; color: var(--muted); font-size: 12.5px; }
+  .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -1px; margin-right: 5px; }
+
+  /* panneau latéral */
+  .scrim { position: fixed; inset: 0; background: rgba(12, 14, 24, .45); z-index: 40; }
+  .drawer {
+    position: fixed; top: 0; right: 0; bottom: 0; z-index: 41; width: min(560px, 100vw); background: var(--surface); box-shadow: var(--shadow);
+    overflow-y: auto; padding-block: calc(16px + env(safe-area-inset-top, 0px)) calc(24px + env(safe-area-inset-bottom, 0px));
+    padding-left: 20px; padding-right: max(20px, env(safe-area-inset-right, 0px));
+  }
+  .drawer h2 { font-family: var(--f-display); font-size: 21px; margin: 0; }
+  .drawer .sub { color: var(--muted); margin: 2px 0 14px; }
+  .drawer .close { position: absolute; top: calc(10px + env(safe-area-inset-top, 0px)); right: max(12px, env(safe-area-inset-right, 0px)); }
+  .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 16px; }
+  .kpi { border: 1px solid var(--line); border-radius: 9px; padding: 8px 10px; }
+  .kpi span { display: block; color: var(--muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: .5px; }
+  .kpi b { font-family: var(--f-mono); font-size: 17px; }
+  .lines { display: grid; gap: 8px; }
+  .line { border: 1px solid var(--line); border-radius: 9px; padding: 10px 12px; display: grid; gap: 8px; }
+  .line .top { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+  .line .top b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .line .meta { color: var(--muted); font-size: 12px; }
+  .line .fields { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: end; }
+  .fld { display: grid; gap: 2px; font-size: 11.5px; color: var(--muted); }
+  .fld input, .fld select { width: 92px; color: var(--ink); font-size: 14px; }
+  .fld select { width: auto; }
+  .reste { color: var(--warn); font-weight: 600; font-size: 12.5px; }
+  .moved { font-size: 12px; color: var(--muted); }
+  .section-title { font-size: 12px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); margin: 18px 0 8px; }
+  .add-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
+
+  /* listes */
+  table.list { border-collapse: collapse; width: 100%; font-size: 13px; }
+  .list th, .list td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  .list th { font-weight: 600; color: var(--muted); font-size: 12px; }
+  .list td.n, .list th.n { text-align: right; font-family: var(--f-mono); }
+  .list tr:last-child td { border-bottom: 0; }
+  .list tr.click { cursor: pointer; }
+  .list tr.click:hover td { background: var(--accent-soft); }
+  .list tfoot td { font-weight: 600; background: var(--accent-soft); }
+  .list input { width: 78px; text-align: right; font-family: var(--f-mono); }
+  .rep-in { color: var(--ok); } .rep-out { color: var(--warn); }
+  .tag { font-size: 11px; border-radius: 4px; padding: 1px 6px; background: var(--accent-soft); color: var(--accent); white-space: nowrap; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px; min-width: 0; }
+  .card h3 { margin: 0; font-size: 16px; }
+  .card .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; margin-top: 8px; }
+  .abs { display: flex; justify-content: space-between; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+  .abs:last-child { border-bottom: 0; }
+  .mini-months { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; margin-top: 10px; }
+  .mini-months div { font-size: 11px; text-align: center; border-radius: 5px; background: var(--bg); padding: 3px 0; }
+  .mini-months b { display: block; font-family: var(--f-mono); font-size: 11.5px; }
+
+  .modal-wrap { position: fixed; inset: 0; z-index: 50; background: rgba(12, 14, 24, .45); display: flex; align-items: flex-start; justify-content: center; overflow-y: auto; padding: 6vh 16px; }
+  .modal { background: var(--surface); border-radius: 12px; box-shadow: var(--shadow); width: 540px; max-width: 100%; padding: 18px 20px; }
+  .modal h2 { font-family: var(--f-display); font-size: 21px; margin: 0 0 10px; }
+  .modal .foot { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; flex-wrap: wrap; }
+  .tests { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+  .tests li { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+  .tests .ok b { color: var(--ok); } .tests .ko b { color: var(--over); }
+  .tests small { display: block; color: var(--muted); }
+  .err { color: var(--over); font-size: 12.5px; min-height: 1em; margin: 6px 0 0; }
+  .empty { text-align: center; color: var(--muted); padding: 40px 16px; }
+  .toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 9px; z-index: 60; max-width: calc(100vw - 32px); font-size: 13.5px; }
+  @media (max-width: 560px) { .kpis { grid-template-columns: 1fr 1fr; } .load .who { min-width: 120px; } .cards { grid-template-columns: minmax(0, 1fr); } }
+</style>
+
+<header class="bar">
+  <div class="bar-top">
+    <h1 class="brand">Plan de charge<small>heures prévues ÷ heures disponibles</small></h1>
+    <label class="lbl-inline">Année <select id="year" aria-label="Année du planning"></select></label>
+    <button class="btn ghost" id="btn-tests">Vérifications</button>
+  </div>
+  <nav class="tabs" id="tabs">
+    <button data-tab="charge" class="on">Charge</button>
+    <button data-tab="dossiers">Dossiers</button>
+    <button data-tab="equipe">Collaborateurs et absences</button>
+  </nav>
+</header>
+
+<main>
+  <div id="banner"></div>
+  <section class="view" id="v-charge">
+    <div class="toolbar">
+      <div class="summary" id="summary"></div>
+      <span class="spacer"></span>
+      <button class="btn" id="btn-export">Exporter en Excel</button>
+    </div>
+    <div class="wrap" id="load-wrap"><div class="empty">Chargement du planning…</div></div>
+    <div class="legend">
+      <span><i style="background:var(--ok-bg);border:1px solid var(--ok)"></i>Moins de 85 %</span>
+      <span><i style="background:var(--warn-bg);border:1px solid var(--warn)"></i>85 à 100 %</span>
+      <span><i style="background:var(--over-bg);border:1px solid var(--over)"></i>Plus de 100 %</span>
+      <span>Disponible = jours ouvrés − jours fériés − absences, × heures par jour. Cliquez une case pour le détail.</span>
+    </div>
+  </section>
+
+  <section class="view" id="v-dossiers" hidden></section>
+  <section class="view" id="v-equipe" hidden></section>
+</main>
+<div id="layer"></div>
+<input type="file" id="file-import" accept=".xlsx,.xls,.csv" hidden>
+
+<script>
+/* ==========================================================================
+   Moteur de calcul (fonctions pures, contrôlées dans « Vérifications »)
+   ========================================================================== */
+const MONTHS = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
+const MONTHS_LONG = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+const MK = m => String(m + 1).padStart(2, '0');           // index 0-11 → clé "01".."12"
+
+const Engine = (() => {
+  const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const parse = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+  const addDays = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+  function easter(y) {   // algorithme de Meeus / Jones / Butcher
+    const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25);
+    const g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4;
+    const l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
+    const month = Math.floor((h + l - 7 * m + 114) / 31), day = ((h + l - 7 * m + 114) % 31) + 1;
+    return new Date(y, month - 1, day);
+  }
+  const cache = {};
+  function holidays(y) {
+    if (cache[y]) return cache[y];
+    const e = easter(y);
+    const list = [
+      [new Date(y, 0, 1), "Jour de l'an"], [addDays(e, 1), 'Lundi de Pâques'], [new Date(y, 4, 1), 'Fête du travail'],
+      [new Date(y, 4, 8), 'Victoire 1945'], [addDays(e, 39), 'Ascension'], [addDays(e, 50), 'Lundi de Pentecôte'],
+      [new Date(y, 6, 14), 'Fête nationale'], [new Date(y, 7, 15), 'Assomption'], [new Date(y, 10, 1), 'Toussaint'],
+      [new Date(y, 10, 11), 'Armistice'], [new Date(y, 11, 25), 'Noël'],
+    ];
+    return (cache[y] = new Map(list.map(([d, n]) => [ymd(d), n])));
+  }
+  const isWeekday = d => d.getDay() !== 0 && d.getDay() !== 6;
+
+  /** Disponibilité d'un collaborateur pour un mois : jours ouvrés, fériés, absences, heures. */
+  function availability(collab, y, m, absences = []) {
+    const hol = holidays(y);
+    const absDays = new Set();
+    for (const a of absences) {
+      if (!a.debut || !a.fin) continue;
+      for (let d = parse(a.debut), end = parse(a.fin); d <= end; d = addDays(d, 1)) absDays.add(ymd(d));
+    }
+    let weekdays = 0, feries = 0, absents = 0;
+    const last = new Date(y, m + 1, 0).getDate();
+    for (let day = 1; day <= last; day++) {
+      const d = new Date(y, m, day);
+      if (!isWeekday(d)) continue;
+      weekdays++;
+      if (hol.has(ymd(d))) { feries++; continue; }
+      if (absDays.has(ymd(d))) absents++;
+    }
+    const hpd = (Number(collab.hebdo) || 39) / 5;
+    const jours = weekdays - feries - absents;
+    return { weekdays, feries, absents, jours, hpd, heures: round1(jours * hpd) };
+  }
+  const round1 = n => Math.round(n * 10) / 10;
+
+  /** Charge : % et niveau de couleur. */
+  function load(prevu, dispo) {
+    if (!dispo) return { pct: prevu > 0 ? Infinity : 0, level: prevu > 0 ? 'over' : 'none' };
+    const pct = prevu / dispo * 100;
+    return { pct, level: pct > 100 ? 'over' : pct >= 85 ? 'warn' : 'ok' };
+  }
+  const pctLabel = l => l.pct === Infinity ? '—' : Math.round(l.pct) + ' %';
+
+  // Accès aux lignes d'un plan (document par dossier et par année)
+  const v = (o, k) => Number(((o || {})[k]) || 0);
+  const line = (plan, collab) => (plan && plan.lignes && plan.lignes[collab]) || {};
+
+  /** Report : le reste (prévu − fait) du mois m part vers (y2, m2). Renvoie les écritures à faire. */
+  function report(planFrom, collab, m, planTo, m2, sameDoc) {
+    const L = line(planFrom, collab);
+    const prevu = v(L.prevu, MK(m)), fait = v(L.fait, MK(m));
+    const reste = round1(prevu - fait);
+    if (!(reste > 0)) return null;
+    const from = { prevu: { [MK(m)]: fait }, repOut: { [MK(m)]: round1(v(L.repOut, MK(m)) + reste) } };
+    const T = sameDoc ? { ...L, prevu: { ...L.prevu, [MK(m)]: fait } } : line(planTo, collab);
+    const to = { prevu: { [MK(m2)]: round1(v(T.prevu, MK(m2)) + reste) }, repIn: { [MK(m2)]: round1(v(T.repIn, MK(m2)) + reste) } };
+    return { reste, from, to };
+  }
+
+  /** Déplacement de h heures d'un collaborateur à un autre, même dossier, même mois. */
+  function move(plan, a, b, m, h) {
+    const A = line(plan, a), B = line(plan, b);
+    const have = v(A.prevu, MK(m));
+    if (!(h > 0) || h > have + 1e-9) return null;
+    return {
+      [a]: { prevu: { [MK(m)]: round1(have - h) } },
+      [b]: { prevu: { [MK(m)]: round1(v(B.prevu, MK(m)) + h) } },
+    };
+  }
+
+  /** Import : dédoublonnage par SIREN, création ou mise à jour. */
+  function planImport(rows, existing) {
+    const norm = s => String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+    const hi = rows.findIndex(r => r.some(c => norm(c).includes('siren') || norm(c).includes('siret')));
+    if (hi < 0) return { error: 'Aucune colonne « SIREN » trouvée dans la première feuille du fichier.' };
+    const head = rows[hi].map(norm);
+    const find = keys => head.findIndex(h => keys.some(k => h.includes(k)));
+    const iS = find(['siren', 'siret']), iN = find(['nom', 'client', 'raison', 'denomination', 'societe', 'dossier']), iC = find(['collab', 'responsable', 'gestionnaire', 'charge']);
+    const out = new Map(); let skipped = 0;
+    for (const r of rows.slice(hi + 1)) {
+      if (!r || r.every(c => String(c ?? '').trim() === '')) continue;
+      let siren = String(r[iS] ?? '').replace(/\D/g, '');
+      if (siren.length === 14) siren = siren.slice(0, 9);
+      if (siren.length !== 9) { skipped++; continue; }
+      out.set(siren, { siren, nom: String(iN >= 0 ? r[iN] ?? '' : '').trim() || 'Dossier ' + siren, collabName: iC >= 0 ? String(r[iC] ?? '').trim() : '' });
+    }
+    const creates = [], updates = [];
+    for (const row of out.values()) (existing.has(row.siren) ? updates : creates).push(row);
+    return { creates, updates, skipped };
+  }
+
+  return { availability, holidays, load, pctLabel, report, move, planImport, round1, ymd, parse, line, v };
+})();
+
+/* ==========================================================================
+   Stockage partagé (db de l'artefact) avec repli local
+   ========================================================================== */
+const COLLS = ['collaborateurs', 'dossiers', 'absences', 'plan'];
+const Store = {
+  mode: 'loading', db: null, canWrite: true, error: null,
+  data: Object.fromEntries(COLLS.map(c => [c, new Map()])),
+  loaded: new Set(),
+  async init(onChange) {
+    this.onChange = onChange;
+    let db = null;
+    try { db = window.claude && window.claude.use ? await window.claude.use('db') : null; } catch (e) { db = null; }
+    if (db) {
+      this.mode = 'shared'; this.db = db;
+      try { const u = await window.claude.use('user'); if (u && (await u.can('data.write')) === false) this.canWrite = false; } catch (e) {}
+      for (const c of COLLS) db.collection(c).limit(1000).onSnapshot(snap => {
+        const m = new Map(); snap.docs.forEach(d => m.set(d.id, d.data()));
+        this.data[c] = m; this.loaded.add(c); this.onChange();
+      }, err => { this.error = err; this.onChange(); });
+    } else {
+      this.mode = 'local';
+      try { const raw = JSON.parse(localStorage.getItem('plancharge.local') || '{}'); for (const c of COLLS) this.data[c] = new Map(Object.entries(raw[c] || {})); } catch (e) {}
+      COLLS.forEach(c => this.loaded.add(c)); this.onChange();
+    }
+  },
+  persist() {
+    const o = {}; for (const c of COLLS) o[c] = Object.fromEntries(this.data[c]);
+    try { localStorage.setItem('plancharge.local', JSON.stringify(o)); } catch (e) {}
+    this.onChange();
+  },
+  async set(c, id, body) {
+    if (this.mode === 'shared') return this.db.collection(c).doc(id).set(body);
+    this.data[c] = new Map(this.data[c]).set(id, JSON.parse(JSON.stringify(body))); this.persist();
+  },
+  async merge(c, id, patch, base = {}) {
+    if (this.mode === 'shared') {
+      const ref = this.db.collection(c).doc(id);
+      if (this.data[c].has(id)) { try { return await ref.update(patch); } catch (e) { if (e.code !== 'invalid_argument') throw e; } }
+      return ref.set(deepMerge(deepMerge({}, base), patch));
+    }
+    const cur = JSON.parse(JSON.stringify(this.data[c].get(id) || base));
+    this.data[c] = new Map(this.data[c]).set(id, deepMerge(cur, patch)); this.persist();
+  },
+  async del(c, id) {
+    if (this.mode === 'shared') return this.db.collection(c).doc(id).delete();
+    const m = new Map(this.data[c]); m.delete(id); this.data[c] = m; this.persist();
+  },
+};
+function deepMerge(a, b) {
+  for (const [k, val] of Object.entries(b)) {
+    if (val && typeof val === 'object' && !Array.isArray(val) && a[k] && typeof a[k] === 'object') deepMerge(a[k], val);
+    else a[k] = val;
+  }
+  return a;
+}
+
+/* ==========================================================================
+   Données dérivées
+   ========================================================================== */
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const h1 = n => (Math.round((n || 0) * 10) / 10).toLocaleString('fr-FR', { maximumFractionDigits: 1 });
+const parseH = s => { const n = parseFloat(String(s).replace(',', '.').replace(/\s/g, '')); return isFinite(n) ? Engine.round1(n) : NaN; };
+const lsGet = (k, d) => { try { const x = localStorage.getItem(k); return x === null ? d : x; } catch (e) { return d; } };
+const lsSet = (k, x) => { try { localStorage.setItem(k, x); } catch (e) {} };
+const TODAY = new Date();
+const UI = { tab: lsGet('plancharge.tab', 'charge'), year: Number(lsGet('plancharge.year', TODAY.getFullYear())), q: '' };
+
+const collabs = () => [...Store.data.collaborateurs.entries()].map(([id, c]) => ({ id, ...c })).sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
+const collabName = id => (Store.data.collaborateurs.get(id) || {}).nom || 'Collaborateur retiré';
+const dossiers = () => [...Store.data.dossiers.values()].sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
+const planId = (siren, y) => `${siren}_${y}`;
+const planOf = (siren, y) => Store.data.plan.get(planId(siren, y));
+const absencesOf = id => [...Store.data.absences.entries()].map(([k, a]) => ({ id: k, ...a })).filter(a => a.collab === id).sort((a, b) => a.debut.localeCompare(b.debut));
+
+/** Matrice de charge de l'année : la même source sert l'écran et l'export. */
+function chargeMatrix(y) {
+  const cs = collabs();
+  const prev = new Map(cs.map(c => [c.id, Array(12).fill(0)]));
+  const detail = new Map();   // collab|m -> [{dossier, prevu, fait}]
+  for (const d of dossiers()) {
+    const p = planOf(d.siren, y);
+    if (!p || !p.lignes) continue;
+    for (const [cid, L] of Object.entries(p.lignes)) {
+      if (!prev.has(cid)) continue;
+      for (let m = 0; m < 12; m++) {
+        const pv = Engine.v(L.prevu, MK(m));
+        prev.get(cid)[m] += pv;
+        if (pv || Engine.v(L.fait, MK(m)) || Engine.v(L.repOut, MK(m)) || Engine.v(L.repIn, MK(m))) {
+          const k = cid + '|' + m;
+          if (!detail.has(k)) detail.set(k, []);
+          detail.get(k).push({ d, L, m });
+        }
+      }
+    }
+  }
+  const rows = cs.map(c => {
+    const abs = absencesOf(c.id);
+    const months = Array.from({ length: 12 }, (_, m) => {
+      const av = Engine.availability(c, y, m, abs);
+      const prevu = Engine.round1(prev.get(c.id)[m]);
+      return { prevu, dispo: av.heures, av, load: Engine.load(prevu, av.heures) };
+    });
+    const tp = Engine.round1(months.reduce((s, x) => s + x.prevu, 0)), td = Engine.round1(months.reduce((s, x) => s + x.dispo, 0));
+    return { c, months, total: { prevu: tp, dispo: td, load: Engine.load(tp, td) } };
+  });
+  const totals = Array.from({ length: 12 }, (_, m) => {
+    const p = Engine.round1(rows.reduce((s, r) => s + r.months[m].prevu, 0)), dd = Engine.round1(rows.reduce((s, r) => s + r.months[m].dispo, 0));
+    return { prevu: p, dispo: dd, load: Engine.load(p, dd) };
+  });
+  const tp = Engine.round1(totals.reduce((s, x) => s + x.prevu, 0)), td = Engine.round1(totals.reduce((s, x) => s + x.dispo, 0));
+  return { rows, totals, grand: { prevu: tp, dispo: td, load: Engine.load(tp, td) }, detail };
+}
+
+/* ==========================================================================
+   Rendu
+   ========================================================================== */
+function render() {
+  if (Store.mode === 'loading') return;
+  const focusId = document.activeElement && document.activeElement.id;
+  document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === UI.tab));
+  for (const t of ['charge', 'dossiers', 'equipe']) $('#v-' + t).hidden = t !== UI.tab;
+  const y0 = TODAY.getFullYear();
+  $('#year').innerHTML = [y0 - 1, y0, y0 + 1].map(y => `<option ${y === UI.year ? 'selected' : ''}>${y}</option>`).join('');
+  let b = '';
+  if (Store.mode === 'local') b += `<div class="banner warn">Mode local : les données restent dans ce navigateur. Ouvrez l'appli depuis son lien claude.ai pour travailler à plusieurs.</div>`;
+  if (!Store.canWrite) b += `<div class="banner">Lecture seule : votre accès ne permet pas de modifier le planning.</div>`;
+  if (Store.error) b += `<div class="banner warn">La synchronisation est interrompue. Rechargez la page.</div>`;
+  $('#banner').innerHTML = b;
+  if (UI.tab === 'charge') renderCharge();
+  if (UI.tab === 'dossiers') renderDossiers();
+  if (UI.tab === 'equipe') renderEquipe();
+  if (Drawer.open) Drawer.render();
+  if (focusId && !$('#modal')) { const f = document.getElementById(focusId); if (f && f !== document.activeElement) f.focus(); }
+}
+
+function cellHTML(x, attrs = '', tag = 'button') {
+  const lv = x.load.level, w = x.load.pct === Infinity ? 100 : Math.min(100, x.load.pct);
+  return `<${tag} class="c ${lv}" ${attrs} data-prevu="${x.prevu}" data-dispo="${x.dispo}" data-pct="${Engine.pctLabel(x.load)}">
+    <span class="hrs">${h1(x.prevu)} / ${h1(x.dispo)} h</span>
+    <span class="pct">${Engine.pctLabel(x.load)}</span>
+    <span class="bar"><i style="width:${w}%"></i></span></${tag}>`;
+}
+
+function renderCharge() {
+  const y = UI.year, M = chargeMatrix(y);
+  if (!M.rows.length) {
+    $('#load-wrap').innerHTML = `<div class="empty">Aucun collaborateur. Ajoutez l'équipe dans l'onglet « Collaborateurs et absences ».</div>`;
+    $('#summary').innerHTML = ''; return;
+  }
+  let over = 0, warn = 0;
+  M.rows.forEach(r => r.months.forEach(x => { if (x.load.level === 'over') over++; else if (x.load.level === 'warn') warn++; }));
+  $('#summary').innerHTML = `<span class="pill over"><b>${over}</b> mois en surcharge</span><span class="pill warn"><b>${warn}</b> mois à 85-100 %</span>
+    <span class="pill">Cabinet ${y} : <b>${h1(M.grand.prevu)}</b> h prévues / <b>${h1(M.grand.dispo)}</b> h · <b>${Engine.pctLabel(M.grand.load)}</b></span>`;
+  let h = `<table class="load" id="load"><thead><tr><th class="who">Collaborateur</th>`;
+  for (let m = 0; m < 12; m++) {
+    const days = M.rows[0].months[m].av;
+    h += `<th>${MONTHS[m]}<small>${days.weekdays - days.feries} j ouvrés</small></th>`;
+  }
+  h += `<th>Année ${y}</th></tr></thead><tbody>`;
+  for (const r of M.rows) {
+    h += `<tr><td class="who"><b>${esc(r.c.nom)}</b><span class="num">${h1(r.c.hebdo)} h/sem. · ${h1(r.c.hebdo / 5)} h/j</span></td>`;
+    r.months.forEach((x, m) => { h += `<td>${cellHTML(x, `data-act="detail" data-collab="${r.c.id}" data-m="${m}" title="${esc(r.c.nom)}, ${MONTHS_LONG[m]} : ${x.av.jours} jours disponibles${x.av.absents ? ', ' + x.av.absents + ' j d\'absence' : ''}"`)}</td>`; });
+    h += `<td>${cellHTML(r.total, 'data-total="1"', 'div').replace('class="c ', 'class="c year ')}</td></tr>`;
+  }
+  h += `<tr class="total"><td class="who"><b>Total cabinet</b><span>${M.rows.length} collaborateurs</span></td>`;
+  M.totals.forEach(x => { h += `<td>${cellHTML(x, '', 'div')}</td>`; });
+  h += `<td>${cellHTML(M.grand, '', 'div')}</td></tr></tbody></table>`;
+  const w = $('#load-wrap'), sx = w.scrollLeft; w.innerHTML = h; w.scrollLeft = sx;
+}
+
+function renderDossiers() {
+  const y = UI.year, q = UI.q.toLowerCase();
+  const ds = dossiers().filter(d => !q || d.nom.toLowerCase().includes(q) || d.siren.includes(q.replace(/\s/g, '')));
+  let tp = 0, tf = 0, tr = 0;
+  const rows = ds.map(d => {
+    const p = planOf(d.siren, y);
+    let prevu = 0, fait = 0, rep = 0; const who = new Set();
+    if (p && p.lignes) for (const [cid, L] of Object.entries(p.lignes)) for (let m = 0; m < 12; m++) {
+      const pv = Engine.v(L.prevu, MK(m)); prevu += pv; fait += Engine.v(L.fait, MK(m)); rep += Engine.v(L.repOut, MK(m)); if (pv) who.add(cid);
+    }
+    tp += prevu; tf += fait; tr += rep;
+    return `<tr class="click" data-act="dossier" data-siren="${d.siren}"><td><b>${esc(d.nom)}</b></td><td class="num">${esc(d.siren)}</td>
+      <td>${esc(collabName(d.collab))}${[...who].filter(c => c !== d.collab).map(c => ` <span class="tag">+ ${esc(collabName(c))}</span>`).join('')}</td>
+      <td class="n">${h1(prevu)}</td><td class="n">${h1(fait)}</td><td class="n">${h1(rep)}</td></tr>`;
+  }).join('');
+  $('#v-dossiers').innerHTML = `
+    <div class="toolbar"><button class="btn primary" data-act="new-dossier">Nouveau dossier</button>
+      <label class="btn" for="file-import">Importer un fichier Excel</label>
+      <input type="text" id="q" placeholder="Rechercher un dossier ou un SIREN" value="${esc(UI.q)}" aria-label="Rechercher">
+      <span class="lead" style="margin:0">Colonnes lues : nom du client, SIREN, collaborateur. Le SIREN évite les doublons.</span></div>
+    <div class="wrap">${ds.length ? `<table class="list"><thead><tr><th>Dossier</th><th>SIREN</th><th>Collaborateurs</th><th class="n">Prévu ${y}</th><th class="n">Fait</th><th class="n">Reporté</th></tr></thead>
+      <tbody>${rows}</tbody><tfoot><tr><td colspan="3">${ds.length} dossiers</td><td class="n">${h1(tp)}</td><td class="n">${h1(tf)}</td><td class="n">${h1(tr)}</td></tr></tfoot></table>`
+      : `<div class="empty">Aucun dossier. Créez-en un ou importez votre fichier Excel.</div>`}</div>`;
+}
+
+function renderEquipe() {
+  const y = UI.year, cs = collabs();
+  $('#v-equipe').innerHTML = `
+    <h2 class="h2">Collaborateurs et absences</h2>
+    <p class="lead">Base horaire hebdomadaire sur 5 jours (39 h = 7,8 h par jour). Les absences retirent les jours ouvrés non fériés de la période.</p>
+    <div class="cards">${cs.map(c => {
+      const abs = absencesOf(c.id);
+      return `<div class="card">
+        <div class="row" style="margin-top:0">
+          <label class="fld" style="flex:1">Nom<input type="text" id="cn-${c.id}" value="${esc(c.nom)}" data-collab-field="nom" data-id="${c.id}" style="width:100%"></label>
+          <label class="fld">Heures / semaine<input type="text" inputmode="decimal" id="ch-${c.id}" value="${h1(c.hebdo)}" data-collab-field="hebdo" data-id="${c.id}"></label>
+        </div>
+        <div class="mini-months">${Array.from({ length: 12 }, (_, m) => { const av = Engine.availability(c, y, m, abs); return `<div title="${av.jours} jours disponibles">${MONTHS[m]}<b>${h1(av.heures)}</b></div>`; }).join('')}</div>
+        <div class="section-title">Absences ${y}</div>
+        ${abs.filter(a => a.fin >= y + '-01-01' && a.debut <= y + '-12-31').map(a => `<div class="abs"><span class="num">${a.debut.split('-').reverse().join('/')} → ${a.fin.split('-').reverse().join('/')}</span>
+          <span>${esc(a.motif || 'Congés')}</span><button class="btn ghost small danger" data-act="abs-del" data-id="${a.id}">Retirer</button></div>`).join('') || '<p class="lead" style="margin:0">Aucune absence.</p>'}
+        <div class="row"><label class="fld">Du<input type="date" id="ad-${c.id}"></label><label class="fld">Au<input type="date" id="af-${c.id}"></label>
+          <label class="fld">Motif<select id="am-${c.id}"><option>Congés</option><option>Maladie</option><option>Formation</option><option>Autre</option></select></label>
+          <button class="btn" data-act="abs-add" data-id="${c.id}">Ajouter</button></div>
+        <div class="row"><button class="btn ghost small danger" data-act="collab-del" data-id="${c.id}">Retirer ce collaborateur</button></div>
+      </div>`;
+    }).join('')}
+      <div class="card"><h3>Nouveau collaborateur</h3>
+        <div class="row"><label class="fld" style="flex:1">Nom<input type="text" id="new-c-nom" placeholder="Prénom Nom" style="width:100%"></label>
+          <label class="fld">Heures / semaine<input type="text" inputmode="decimal" id="new-c-h" value="39"></label>
+          <button class="btn primary" data-act="collab-add">Ajouter</button></div></div>
+    </div>`;
+}
+
+/* ---------- panneau de détail (collaborateur × mois, ou dossier) ---------- */
+const Drawer = {
+  open: null,
+  show(state) { this.open = state; this.render(); },
+  close() { this.open = null; $('#layer').innerHTML = ''; },
+  render() {
+    const s = this.open; if (!s) return;
+    const keep = document.querySelector('.drawer'); const top = keep ? keep.scrollTop : 0;
+    const html = s.kind === 'cell' ? cellDetail(s.collab, s.m) : dossierDetail(s.siren);
+    $('#layer').innerHTML = `<div class="scrim" data-act="close"></div><aside class="drawer" role="dialog" aria-modal="true">
+      <button class="btn ghost close" data-act="close" aria-label="Fermer">✕</button>${html}</aside>`;
+    document.querySelector('.drawer').scrollTop = top;
+  },
+};
+
+function monthOptions(y, m) {
+  const opts = [];
+  for (let k = m + 1; k < 12; k++) opts.push(`<option value="${y}-${k}">${MONTHS_LONG[k]} ${y}</option>`);
+  opts.push(`<option value="${y + 1}-0">janvier ${y + 1}</option>`);
+  return opts.join('');
+}
+
+function lineHTML(d, cid, m, y, showCollab) {
+  const L = Engine.line(planOf(d.siren, y), cid);
+  const pv = Engine.v(L.prevu, MK(m)), fait = (L.fait || {})[MK(m)];
+  const reste = fait == null ? 0 : Engine.round1(pv - fait);
+  const rin = Engine.v(L.repIn, MK(m)), rout = Engine.v(L.repOut, MK(m));
+  const others = collabs().filter(c => c.id !== cid);
+  const k = `${d.siren}-${cid}-${m}`;
+  return `<div class="line">
+    <div class="top"><b>${esc(showCollab ? collabName(cid) : d.nom)}</b><span class="meta num">${showCollab ? '' : esc(d.siren)}</span></div>
+    ${rin || rout ? `<div class="moved">${rin ? `<span class="rep-in">+${h1(rin)} h reportées depuis un mois précédent</span> ` : ''}${rout ? `<span class="rep-out">${h1(rout)} h reportées vers plus tard</span>` : ''}</div>` : ''}
+    <div class="fields">
+      <label class="fld">Prévu (h)<input type="text" inputmode="decimal" id="pv-${k}" value="${h1(pv)}" data-edit="prevu" data-siren="${d.siren}" data-collab="${cid}" data-m="${m}"></label>
+      <label class="fld">Fait (h)<input type="text" inputmode="decimal" id="ft-${k}" value="${fait == null ? '' : h1(fait)}" placeholder="—" data-edit="fait" data-siren="${d.siren}" data-collab="${cid}" data-m="${m}"></label>
+      ${reste > 0 ? `<span class="reste">Reste ${h1(reste)} h</span>
+        <label class="fld">Reporter vers<select id="rt-${k}">${monthOptions(y, m)}</select></label>
+        <button class="btn primary small" data-act="report" data-siren="${d.siren}" data-collab="${cid}" data-m="${m}" data-sel="rt-${k}">Reporter</button>` : ''}
+    </div>
+    ${pv > 0 && others.length ? `<div class="fields">
+      <label class="fld">Déplacer (h)<input type="text" inputmode="decimal" id="mv-${k}" placeholder="0"></label>
+      <label class="fld">vers<select id="mt-${k}">${others.map(c => `<option value="${c.id}">${esc(c.nom)}</option>`).join('')}</select></label>
+      <button class="btn small" data-act="move" data-siren="${d.siren}" data-collab="${cid}" data-m="${m}" data-k="${k}">Déplacer</button></div>` : ''}
+  </div>`;
+}
+
+function cellDetail(cid, m) {
+  const y = UI.year, c = Store.data.collaborateurs.get(cid);
+  if (!c) return '<p class="lead">Ce collaborateur a été retiré.</p>';
+  const M = chargeMatrix(y), row = M.rows.find(r => r.c.id === cid), x = row.months[m];
+  const items = (M.detail.get(cid + '|' + m) || []).sort((a, b) => Engine.v(b.L.prevu, MK(m)) - Engine.v(a.L.prevu, MK(m)));
+  const abs = absencesOf(cid).filter(a => a.fin >= `${y}-${MK(m)}-01` && a.debut <= `${y}-${MK(m)}-31`);
+  const lv = x.load.level;
+  return `<h2>${esc(c.nom)} · ${MONTHS_LONG[m]} ${y}</h2>
+    <p class="sub">${x.av.weekdays} jours ouvrés − ${x.av.feries} férié${x.av.feries > 1 ? 's' : ''} − ${x.av.absents} j d'absence = ${x.av.jours} jours × ${h1(x.av.hpd)} h</p>
+    <div class="kpis"><div class="kpi"><span>Prévu</span><b>${h1(x.prevu)} h</b></div><div class="kpi"><span>Disponible</span><b>${h1(x.dispo)} h</b></div>
+      <div class="kpi" style="color:var(--${lv === 'none' ? 'muted' : lv})"><span>Charge</span><b>${Engine.pctLabel(x.load)}</b></div></div>
+    ${abs.length ? `<p class="lead">Absences : ${abs.map(a => `${esc(a.motif || 'Congés')} du ${a.debut.split('-').reverse().join('/')} au ${a.fin.split('-').reverse().join('/')}`).join(' ; ')}</p>` : ''}
+    <div class="section-title">Dossiers du mois (${items.length})</div>
+    <div class="lines">${items.map(it => lineHTML(it.d, cid, m, y, false)).join('') || '<p class="lead">Aucune heure prévue ce mois-ci.</p>'}</div>
+    <div class="section-title">Ajouter des heures</div>
+    <div class="add-row"><label class="fld">Dossier<select id="add-d">${dossiers().map(d => `<option value="${d.siren}">${esc(d.nom)}</option>`).join('')}</select></label>
+      <label class="fld">Heures<input type="text" inputmode="decimal" id="add-h" placeholder="0"></label>
+      <button class="btn primary" data-act="add-hours" data-collab="${cid}" data-m="${m}" ${Store.canWrite ? '' : 'disabled'}>Ajouter</button></div>`;
+}
+
+function dossierDetail(siren) {
+  const y = UI.year, d = Store.data.dossiers.get(siren);
+  if (!d) return '<p class="lead">Ce dossier a été supprimé.</p>';
+  const p = planOf(siren, y);
+  const ids = new Set(Object.keys((p && p.lignes) || {})); if (d.collab) ids.add(d.collab);
+  const cids = [...ids].filter(id => Store.data.collaborateurs.has(id) || Object.values(Engine.line(p, id).prevu || {}).some(Number));
+  let tp = 0, tf = 0, tro = 0, tri = 0;
+  const blocks = cids.map(cid => {
+    const L = Engine.line(p, cid);
+    let rows = '';
+    let sp = 0, sf = 0, so = 0, si = 0;
+    for (let m = 0; m < 12; m++) {
+      const pv = Engine.v(L.prevu, MK(m)), f = (L.fait || {})[MK(m)], ro = Engine.v(L.repOut, MK(m)), ri = Engine.v(L.repIn, MK(m));
+      sp += pv; sf += Number(f || 0); so += ro; si += ri;
+      const reste = f == null ? 0 : Engine.round1(pv - f);
+      rows += `<tr><td>${MONTHS_LONG[m]}</td>
+        <td class="n"><input type="text" inputmode="decimal" id="dp-${cid}-${m}" value="${h1(pv)}" data-edit="prevu" data-siren="${siren}" data-collab="${cid}" data-m="${m}" aria-label="Prévu ${MONTHS_LONG[m]}"></td>
+        <td class="n"><input type="text" inputmode="decimal" id="df-${cid}-${m}" value="${f == null ? '' : h1(f)}" placeholder="—" data-edit="fait" data-siren="${siren}" data-collab="${cid}" data-m="${m}" aria-label="Fait ${MONTHS_LONG[m]}"></td>
+        <td class="n">${ri ? `<span class="rep-in">+${h1(ri)}</span>` : ''} ${ro ? `<span class="rep-out">−${h1(ro)}</span>` : ''}</td>
+        <td>${reste > 0 ? `<button class="btn small" data-act="report-ask" data-siren="${siren}" data-collab="${cid}" data-m="${m}">Reporter ${h1(reste)} h</button>` : ''}</td></tr>`;
+    }
+    tp += sp; tf += sf; tro += so; tri += si;
+    return `<div class="section-title">${esc(collabName(cid))}${cid === d.collab ? ' · responsable' : ''}</div>
+      <div class="wrap"><table class="list"><thead><tr><th>Mois</th><th class="n">Prévu</th><th class="n">Fait</th><th class="n">Report</th><th></th></tr></thead>
+      <tbody>${rows}</tbody><tfoot><tr><td>Total</td><td class="n">${h1(sp)}</td><td class="n">${h1(sf)}</td><td class="n">${si ? '+' + h1(si) : ''} ${so ? '−' + h1(so) : ''}</td><td></td></tr></tfoot></table></div>`;
+  }).join('');
+  const others = collabs().filter(c => !cids.includes(c.id));
+  return `<h2>${esc(d.nom)}</h2><p class="sub"><span class="num">${esc(d.siren)}</span> · responsable : ${esc(collabName(d.collab))} · année ${y}</p>
+    <div class="kpis"><div class="kpi"><span>Prévu ${y}</span><b>${h1(tp)} h</b></div><div class="kpi"><span>Fait</span><b>${h1(tf)} h</b></div>
+      <div class="kpi"><span>Reporté</span><b>${h1(tro)} h</b></div></div>
+    <p class="lead" style="font-size:12.5px">Le total prévu ne change pas quand on reporte : les heures passent d'un mois à l'autre.${tri && !tro ? '' : ''}</p>
+    ${blocks}
+    ${others.length ? `<div class="section-title">Partager le dossier</div><div class="add-row">
+      <label class="fld">Collaborateur<select id="share-c">${others.map(c => `<option value="${c.id}">${esc(c.nom)}</option>`).join('')}</select></label>
+      <button class="btn" data-act="share" data-siren="${siren}">Ajouter une ligne</button></div>` : ''}
+    <div class="section-title">Fiche</div>
+    <div class="add-row"><label class="fld" style="flex:1">Nom<input type="text" id="dn" value="${esc(d.nom)}" style="width:100%"></label>
+      <label class="fld">Responsable<select id="dc">${collabs().map(c => `<option value="${c.id}" ${c.id === d.collab ? 'selected' : ''}>${esc(c.nom)}</option>`).join('')}</select></label>
+      <button class="btn" data-act="dossier-save" data-siren="${siren}">Enregistrer</button>
+      <button class="btn ghost danger" data-act="dossier-del" data-siren="${siren}">Supprimer</button></div>`;
+}
+
+/* ==========================================================================
+   Actions
+   ========================================================================== */
+function toast(msg) { const t = document.createElement('div'); t.className = 'toast'; t.setAttribute('role', 'status'); t.textContent = msg; document.body.appendChild(t); setTimeout(() => t.remove(), 2800); }
+async function guarded(fn) {
+  if (!Store.canWrite) { toast('Lecture seule : modification impossible.'); return false; }
+  try { await fn(); return true; }
+  catch (e) {
+    if (e && e.code === 'quota_exceeded') toast('La base est pleine : supprimez des dossiers ou des années anciennes.');
+    else if (e && e.code === 'invalid_argument') { Store.canWrite = false; toast('Modification refusée : votre accès est en lecture seule.'); render(); }
+    else toast("L'enregistrement a échoué. Réessayez dans un instant.");
+    return false;
+  }
+}
+const planBase = (siren, y) => ({ siren, annee: y, lignes: {} });
+const patchLine = (siren, y, cid, obj) => Store.merge('plan', planId(siren, y), { lignes: { [cid]: obj } }, planBase(siren, y));
+
+async function doReport(siren, cid, m, target) {
+  const y = UI.year;
+  const [y2, m2] = target.split('-').map(Number);
+  const same = y2 === y;
+  const r = Engine.report(planOf(siren, y), cid, m, planOf(siren, y2), m2, same);
+  if (!r) { toast('Rien à reporter : le fait couvre le prévu.'); return; }
+  const ok = await guarded(async () => {
+    if (same) {
+      const patch = deepMerge(JSON.parse(JSON.stringify(r.from)), r.to);
+      await patchLine(siren, y, cid, patch);
+    } else {
+      await patchLine(siren, y, cid, r.from);
+      await patchLine(siren, y2, cid, r.to);
+    }
+  });
+  if (ok) toast(`${h1(r.reste)} h reportées vers ${MONTHS_LONG[m2]} ${y2}`);
+}
+
+function askReport(siren, cid, m) {
+  modal(`<h2>Reporter les heures non faites</h2><p class="lead">${esc(Store.data.dossiers.get(siren).nom)} · ${esc(collabName(cid))} · ${MONTHS_LONG[m]} ${UI.year}</p>
+    <label class="fld">Vers le mois<select id="rep-target">${monthOptions(UI.year, m)}</select></label>
+    <div class="foot"><button class="btn" data-act="modal-close">Annuler</button><button class="btn primary" id="rep-ok">Reporter</button></div>`);
+  $('#rep-ok').onclick = async () => { const t = $('#rep-target').value; closeModal(); await doReport(siren, cid, m, t); };
+}
+
+async function doMove(siren, from, m, k) {
+  const h = parseH($('#mv-' + k).value), to = $('#mt-' + k).value;
+  const r = Engine.move(planOf(siren, UI.year), from, to, m, h);
+  if (!r) { toast('Indiquez un nombre d’heures entre 0 et le prévu de la ligne.'); return; }
+  const ok = await guarded(() => Store.merge('plan', planId(siren, UI.year), { lignes: r }, planBase(siren, UI.year)));
+  if (ok) toast(`${h1(h)} h déplacées vers ${collabName(to)}`);
+}
+
+async function editValue(el) {
+  const { siren, collab, m, edit } = el.dataset;
+  const raw = el.value.trim();
+  const y = UI.year, mk = MK(Number(m));
+  if (edit === 'fait' && raw === '') { await guarded(() => patchLine(siren, y, collab, { fait: { [mk]: null } })); return; }
+  const n = parseH(raw);
+  if (!(n >= 0)) { toast('Saisissez un nombre d’heures, par exemple 12,5.'); el.focus(); return; }
+  const cur = Engine.line(planOf(siren, y), collab)[edit] || {};
+  if (cur[mk] === n) return;
+  await guarded(() => patchLine(siren, y, collab, { [edit]: { [mk]: n } }));
+}
+
+function modal(html) { const w = document.createElement('div'); w.className = 'modal-wrap'; w.id = 'modal'; w.innerHTML = `<div class="modal" role="dialog" aria-modal="true">${html}</div>`; document.body.appendChild(w); const f = w.querySelector('input, select'); if (f) f.focus(); }
+const closeModal = () => { const w = $('#modal'); if (w) w.remove(); };
+
+function newDossier() {
+  modal(`<h2>Nouveau dossier</h2>
+    <div class="add-row"><label class="fld" style="flex:1">Nom du client<input type="text" id="nd-nom" style="width:100%"></label></div>
+    <div class="add-row" style="margin-top:10px"><label class="fld">SIREN<input type="text" id="nd-siren" inputmode="numeric" placeholder="9 chiffres" style="width:140px"></label>
+      <label class="fld">Collaborateur responsable<select id="nd-c">${collabs().map(c => `<option value="${c.id}">${esc(c.nom)}</option>`).join('')}</select></label></div>
+    <p class="err" id="nd-err"></p>
+    <div class="foot"><button class="btn" data-act="modal-close">Annuler</button><button class="btn primary" id="nd-ok">Créer</button></div>`);
+  $('#nd-ok').onclick = async () => {
+    const nom = $('#nd-nom').value.trim(), siren = $('#nd-siren').value.replace(/\D/g, ''), collab = $('#nd-c').value;
+    if (!nom || siren.length !== 9) { $('#nd-err').textContent = 'Indiquez le nom et un SIREN à 9 chiffres.'; return; }
+    if (Store.data.dossiers.has(siren)) { $('#nd-err').textContent = `Le SIREN ${siren} existe déjà (${Store.data.dossiers.get(siren).nom}).`; return; }
+    if (await guarded(() => Store.set('dossiers', siren, { nom, siren, collab }))) { closeModal(); Drawer.show({ kind: 'dossier', siren }); toast('Dossier créé : saisissez ses heures mois par mois.'); }
+  };
+}
+
+const slug = s => 'c-' + s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
+async function ensureCollab(name, hebdo = 39) {
+  if (!name) return '';
+  const hit = collabs().find(c => c.nom.toLowerCase() === name.toLowerCase());
+  if (hit) return hit.id;
+  let id = slug(name) || 'c-' + Date.now().toString(36);
+  if (Store.data.collaborateurs.has(id)) id += '-' + Date.now().toString(36).slice(-4);
+  await Store.set('collaborateurs', id, { nom: name, hebdo });
+  return id;
+}
+
+async function importFile(file) {
+  if (!window.XLSX) { toast("Le module Excel n'a pas pu se charger. Rechargez la page."); return; }
+  let rows;
+  try { const wb = XLSX.read(await file.arrayBuffer(), { type: 'array' }); rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: false, defval: '' }); }
+  catch (e) { toast('Ce fichier ne peut pas être lu. Enregistrez-le en .xlsx ou .csv.'); return; }
+  const plan = Engine.planImport(rows, Store.data.dossiers);
+  if (plan.error) { toast(plan.error); return; }
+  const ok = await guarded(async () => {
+    for (const r of [...plan.creates, ...plan.updates]) {
+      const collab = await ensureCollab(r.collabName);
+      if (Store.data.dossiers.has(r.siren)) { const p = { nom: r.nom }; if (collab) p.collab = collab; await Store.merge('dossiers', r.siren, p); }
+      else await Store.set('dossiers', r.siren, { nom: r.nom, siren: r.siren, collab });
+    }
+  });
+  if (!ok) return;
+  modal(`<h2>Import terminé</h2><ul class="tests">
+    <li class="ok"><b>${plan.creates.length}</b> dossier(s) créé(s)<small>Saisissez ensuite leurs heures prévues.</small></li>
+    <li><b>${plan.updates.length}</b> dossier(s) déjà connu(s), mis à jour<small>Reconnus par le SIREN : nom et responsable actualisés, heures conservées.</small></li>
+    ${plan.skipped ? `<li class="ko"><b>${plan.skipped}</b> ligne(s) ignorée(s)<small>SIREN absent ou différent de 9 chiffres.</small></li>` : ''}</ul>
+    <div class="foot"><button class="btn primary" data-act="modal-close">Fermer</button></div>`);
+}
+
+/** Lignes d'export, construites depuis chargeMatrix comme l'écran. */
+function exportSheets() {
+  const y = UI.year, M = chargeMatrix(y);
+  const head = ['Collaborateur'];
+  for (let m = 0; m < 12; m++) head.push(`${MONTHS[m]} prévu (h)`, `${MONTHS[m]} disponible (h)`, `${MONTHS[m]} charge`);
+  head.push('Année prévu (h)', 'Année disponible (h)', 'Année charge');
+  const charge = [head];
+  const lineOf = (label, months, total) => { const l = [label]; months.forEach(x => l.push(x.prevu, x.dispo, Engine.pctLabel(x.load))); l.push(total.prevu, total.dispo, Engine.pctLabel(total.load)); return l; };
+  M.rows.forEach(r => charge.push(lineOf(r.c.nom, r.months, r.total)));
+  charge.push(lineOf('Total cabinet', M.totals, M.grand));
+  const dos = [['Dossier', 'SIREN', 'Collaborateur', ...MONTHS.map(m => m + ' prévu'), 'Total prévu', 'Total fait', 'Total reporté']];
+  for (const d of dossiers()) {
+    const p = planOf(d.siren, y); if (!p || !p.lignes) continue;
+    for (const [cid, L] of Object.entries(p.lignes)) {
+      const pv = Array.from({ length: 12 }, (_, m) => Engine.v(L.prevu, MK(m)));
+      const f = Array.from({ length: 12 }, (_, m) => Engine.v(L.fait, MK(m))).reduce((a, b) => a + b, 0);
+      const ro = Array.from({ length: 12 }, (_, m) => Engine.v(L.repOut, MK(m))).reduce((a, b) => a + b, 0);
+      dos.push([d.nom, d.siren, collabName(cid), ...pv, Engine.round1(pv.reduce((a, b) => a + b, 0)), Engine.round1(f), Engine.round1(ro)]);
+    }
+  }
+  const abs = [['Collaborateur', 'Du', 'Au', 'Motif']];
+  for (const c of collabs()) for (const a of absencesOf(c.id)) abs.push([c.nom, a.debut.split('-').reverse().join('/'), a.fin.split('-').reverse().join('/'), a.motif || 'Congés']);
+  return { charge, dos, abs, M };
+}
+async function exportExcel() {
+  if (!window.XLSX) { toast("Le module Excel n'a pas pu se charger. Rechargez la page."); return; }
+  const { charge, dos, abs } = exportSheets();
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(charge); ws['!cols'] = charge[0].map((_, i) => ({ wch: i ? 11 : 22 }));
+  XLSX.utils.book_append_sheet(wb, ws, `Charge ${UI.year}`);
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(dos), 'Dossiers');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(abs), 'Absences');
+  const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' }), filename = `plan-de-charge-${UI.year}.xlsx`;
+  let dl = null; try { dl = window.claude && window.claude.use ? await window.claude.use('downloads') : null; } catch (e) {}
+  if (dl) { try { await dl.save({ filename, data: buf }); toast('Export prêt'); } catch (e) { if (e.code !== 'declined') toast("L'export n'a pas pu être enregistré."); } }
+  else XLSX.writeFile(wb, filename);
+}
+
+/* ==========================================================================
+   Vérifications (critères de recette)
+   ========================================================================== */
+function runChecks() {
+  const R = [], t = (name, ok, detail) => R.push({ name, ok, detail });
+  const c39 = { hebdo: 39 };
+  const oct = Engine.availability(c39, 2026, 9, []);
+  t('Octobre 2026 : 22 jours ouvrés, 171,6 h', oct.jours === 22 && oct.heures === 171.6, `${oct.jours} jours × ${h1(oct.hpd)} h = ${h1(oct.heures)} h`);
+  const mai = Engine.availability(c39, 2026, 4, []);
+  const fer = [...Engine.holidays(2026).entries()].filter(([d]) => d.startsWith('2026-05')).map(([d, n]) => `${n} ${d.slice(8)}/05`).join(', ');
+  t('Mai 2026 : 4 jours fériés retirés, 17 jours, 132,6 h', mai.feries === 4 && mai.jours === 17 && mai.heures === 132.6, `${mai.weekdays} jours ouvrés − ${mai.feries} fériés (${fer}) = ${mai.jours} j, ${h1(mai.heures)} h`);
+  const conge = Engine.availability(c39, 2026, 9, [{ debut: '2026-10-05', fin: '2026-10-09' }]);
+  t('5 jours de congé en octobre : 132,6 h', conge.heures === 132.6, `congés du 05 au 09/10 : ${conge.absents} jours retirés, ${h1(conge.heures)} h`);
+  const l1 = Engine.load(120, 171.6), l2 = Engine.load(180, 171.6);
+  t('120 h → 70 % vert ; 180 h → 105 % rouge', Engine.pctLabel(l1) === '70 %' && l1.level === 'ok' && Engine.pctLabel(l2) === '105 %' && l2.level === 'over',
+    `120 / 171,6 = ${Engine.pctLabel(l1)} (${l1.level === 'ok' ? 'vert' : l1.level}) · 180 / 171,6 = ${Engine.pctLabel(l2)} (${l2.level === 'over' ? 'rouge' : l2.level})`);
+  const plan = { lignes: { A: { prevu: { '03': 20 }, fait: { '03': 15 } } } };
+  const r = Engine.report(plan, 'A', 2, plan, 3, true);
+  const after = deepMerge(JSON.parse(JSON.stringify(plan)), { lignes: { A: deepMerge(JSON.parse(JSON.stringify(r.from)), r.to) } });
+  const P = after.lignes.A.prevu, tot = Object.values(P).reduce((a, b) => a + b, 0);
+  t('Report : mars 15 h, avril +5 h, total annuel 20 h', P['03'] === 15 && P['04'] === 5 && tot === 20, `mars ${h1(P['03'])} h · avril ${h1(P['04'])} h · total ${h1(tot)} h`);
+  const mv = Engine.move({ lignes: { A: { prevu: { '06': 40 } }, B: { prevu: { '06': 10 } } } }, 'A', 'B', 5, 10);
+  t('Déplacer 10 h : −10 h pour l’un, +10 h pour l’autre', mv && mv.A.prevu['06'] === 30 && mv.B.prevu['06'] === 20, mv ? `A : 40 → ${mv.A.prevu['06']} h · B : 10 → ${mv.B.prevu['06']} h` : 'déplacement refusé');
+  let ok = null, detail = "Ouvrez l'onglet Charge pour comparer avec l'écran.";
+  const table = document.getElementById('load');
+  if (table && UI.tab === 'charge') {
+    const { charge } = exportSheets();
+    let n = 0, diff = 0;
+    [...table.querySelectorAll('tbody tr')].forEach((tr, i) => {
+      [...tr.querySelectorAll('.c')].forEach((el, j) => {
+        const row = charge[i + 1];
+        n++; if (Number(el.dataset.prevu) !== row[1 + j * 3] || Number(el.dataset.dispo) !== row[2 + j * 3] || el.dataset.pct !== row[3 + j * 3]) diff++;
+      });
+    });
+    ok = diff === 0; detail = `${n} cases comparées (prévu, disponible, %), ${diff} différence(s)`;
+  }
+  t("L'export Excel reprend les chiffres de l'écran", ok !== false, detail);
+  return R;
+}
+
+/* ==========================================================================
+   Événements
+   ========================================================================== */
+document.addEventListener('click', e => {
+  const tab = e.target.closest('#tabs button');
+  if (tab) { UI.tab = tab.dataset.tab; lsSet('plancharge.tab', UI.tab); render(); return; }
+  const el = e.target.closest('[data-act]');
+  if (!el) return;
+  const a = el.dataset.act;
+  switch (a) {
+    case 'detail': Drawer.show({ kind: 'cell', collab: el.dataset.collab, m: Number(el.dataset.m) }); break;
+    case 'dossier': Drawer.show({ kind: 'dossier', siren: el.dataset.siren }); break;
+    case 'close': Drawer.close(); break;
+    case 'modal-close': closeModal(); break;
+    case 'report': doReport(el.dataset.siren, el.dataset.collab, Number(el.dataset.m), $('#' + el.dataset.sel).value); break;
+    case 'report-ask': askReport(el.dataset.siren, el.dataset.collab, Number(el.dataset.m)); break;
+    case 'move': doMove(el.dataset.siren, el.dataset.collab, Number(el.dataset.m), el.dataset.k); break;
+    case 'add-hours': {
+      const siren = $('#add-d').value, h = parseH($('#add-h').value), m = Number(el.dataset.m), cid = el.dataset.collab;
+      if (!(h > 0)) { toast('Indiquez un nombre d’heures.'); break; }
+      const cur = Engine.v(Engine.line(planOf(siren, UI.year), cid).prevu, MK(m));
+      guarded(() => patchLine(siren, UI.year, cid, { prevu: { [MK(m)]: Engine.round1(cur + h) } })).then(ok => ok && toast(`${h1(h)} h ajoutées`));
+      break;
+    }
+    case 'share': guarded(() => patchLine(el.dataset.siren, UI.year, $('#share-c').value, { prevu: {} })); break;
+    case 'new-dossier': newDossier(); break;
+    case 'dossier-save': guarded(() => Store.merge('dossiers', el.dataset.siren, { nom: $('#dn').value.trim() || Store.data.dossiers.get(el.dataset.siren).nom, collab: $('#dc').value })).then(ok => ok && toast('Fiche enregistrée')); break;
+    case 'dossier-del':
+      if (!el.dataset.armed) { el.dataset.armed = '1'; el.textContent = 'Confirmer la suppression'; break; }
+      guarded(async () => {
+        const s = el.dataset.siren; await Store.del('dossiers', s);
+        for (const k of Store.data.plan.keys()) if (k.startsWith(s + '_')) await Store.del('plan', k);
+      }).then(ok => { if (ok) { Drawer.close(); toast('Dossier supprimé'); } });
+      break;
+    case 'abs-add': {
+      const id = el.dataset.id, debut = $('#ad-' + id).value, fin = $('#af-' + id).value || debut;
+      if (!debut || fin < debut) { toast('Choisissez une date de début et une date de fin postérieure.'); break; }
+      const aid = 'a-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+      guarded(() => Store.set('absences', aid, { collab: id, debut, fin, motif: $('#am-' + id).value })).then(ok => ok && toast('Absence ajoutée, disponible recalculé'));
+      break;
+    }
+    case 'abs-del': guarded(() => Store.del('absences', el.dataset.id)); break;
+    case 'collab-add': {
+      const nom = $('#new-c-nom').value.trim(), hb = parseH($('#new-c-h').value);
+      if (!nom || !(hb > 0)) { toast('Indiquez un nom et une base horaire.'); break; }
+      guarded(() => ensureCollab(nom, hb)).then(ok => ok && toast(`${nom} ajouté`));
+      break;
+    }
+    case 'collab-del':
+      if (!el.dataset.armed) { el.dataset.armed = '1'; el.textContent = 'Confirmer : ses heures prévues ne seront plus comptées'; break; }
+      guarded(() => Store.del('collaborateurs', el.dataset.id));
+      break;
+  }
+});
+document.addEventListener('change', e => {
+  const t = e.target;
+  if (t.id === 'year') { UI.year = Number(t.value); lsSet('plancharge.year', UI.year); render(); }
+  if (t.dataset.edit) editValue(t);
+  if (t.dataset.collabField) {
+    const v = t.dataset.collabField === 'hebdo' ? parseH(t.value) : t.value.trim();
+    if (t.dataset.collabField === 'hebdo' && !(v > 0)) { toast('Saisissez une base horaire, par exemple 35 ou 39.'); return; }
+    if (v) guarded(() => Store.merge('collaborateurs', t.dataset.id, { [t.dataset.collabField]: v }));
+  }
+  if (t.id === 'file-import' && t.files[0]) { const f = t.files[0]; t.value = ''; importFile(f); }
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { if ($('#modal')) closeModal(); else Drawer.close(); }
+  if (e.key === 'Enter' && e.target.dataset && e.target.dataset.edit) e.target.blur();
+});
+let qT; document.addEventListener('input', e => { if (e.target.id === 'q') { clearTimeout(qT); qT = setTimeout(() => { UI.q = e.target.value.trim(); render(); const q = $('#q'); q.focus(); q.setSelectionRange(q.value.length, q.value.length); }, 200); } });
+$('#btn-export').addEventListener('click', exportExcel);
+$('#btn-tests').addEventListener('click', () => {
+  const res = runChecks();
+  modal(`<h2>Vérifications</h2><p class="lead">Contrôle du calcul sur des cas de test (collaborateur à 39 h, année 2026).</p>
+    <ul class="tests">${res.map(r => `<li class="${r.ok ? 'ok' : 'ko'}"><b>${r.ok ? '✔' : '✘'}</b> ${esc(r.name)}<small>${esc(r.detail)}</small></li>`).join('')}</ul>
+    <div class="foot"><button class="btn primary" data-act="modal-close">Fermer</button></div>`);
+});
+
+Store.init(render);
+</script>
