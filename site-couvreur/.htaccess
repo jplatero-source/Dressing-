@@ -1,0 +1,33 @@
+# --- Sécurité ---
+Options -Indexes
+<FilesMatch "^(config\.php|.*\.(sqlite|json|md|sh))$">
+  Require all denied
+</FilesMatch>
+<IfModule mod_headers.c>
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always set X-Frame-Options "SAMEORIGIN"
+</IfModule>
+
+# --- HTTPS obligatoire (décommentez une fois le certificat SSL actif) ---
+# RewriteEngine On
+# RewriteCond %{HTTPS} off
+# RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+# --- Taille des envois (5 photos) : à défaut, réglez upload_max_filesize dans le panneau de l'hébergeur ---
+<IfModule mod_php.c>
+  php_value upload_max_filesize 12M
+  php_value post_max_size 64M
+  php_value max_file_uploads 10
+</IfModule>
+
+# --- Cache des fichiers statiques ---
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresByType text/css "access plus 7 days"
+  ExpiresByType application/javascript "access plus 7 days"
+  ExpiresByType image/jpeg "access plus 30 days"
+  ExpiresByType image/webp "access plus 30 days"
+  ExpiresByType image/png "access plus 30 days"
+</IfModule>
+ErrorDocument 404 /index.php

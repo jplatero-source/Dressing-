@@ -1,0 +1,8 @@
+Déposez ici vos vraies photos de chantier (JPEG, 1600 px de large conseillé, moins de 400 Ko).
+Utilisez exactement ces noms de fichiers ; le site les affiche automatiquement à la place des emplacements gris.
+
+accueil-chantier.jpg        grande photo de la page d'accueil
+service-couverture.jpg      service-urgence.jpg        service-zinguerie.jpg
+service-demoussage.jpg      service-isolation.jpg      service-fenetres.jpg
+entreprise-equipe.jpg       equipe-1.jpg  equipe-2.jpg  equipe-3.jpg
+chantier1-avant.jpg / chantier1-apres.jpg … jusqu'à chantier6 (voir inc/realisations.php)

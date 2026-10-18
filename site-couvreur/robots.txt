@@ -1,0 +1,3 @@
+User-agent: *
+Disallow: /admin/
+# Plan du site : déclarez https://votre-domaine.fr/sitemap.php dans Google Search Console
