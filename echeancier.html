@@ -275,6 +275,10 @@ const TVA_REGIMES = [
   { id: 'mensuelle', label: 'Mensuelle' }, { id: 'trimestrielle', label: 'Trimestrielle' },
   { id: 'annuelle', label: 'Annuelle (CA12)' }, { id: 'non', label: 'Non assujetti' },
 ];
+const FORMES = [
+  { id: 'EI', label: 'Entreprise individuelle' }, { id: 'SOC', label: 'Société (SARL, SAS, SNC…)' },
+  { id: 'SA', label: 'Société anonyme (SA)' }, { id: 'AUTRE', label: 'Autre (association, SCI…)' },
+];
 const IMPOTS = [{ id: 'IS', label: 'IS' }, { id: 'IR', label: 'IR' }];
 const AUTRES = [{ id: 'CFE', label: 'CFE' }, { id: 'CVAE', label: 'CVAE' }, { id: 'DAS2', label: 'DAS2' }, { id: 'TVS', label: 'Taxes sur les véhicules' }];
 const TYPES = [
@@ -284,10 +288,23 @@ const TYPES = [
 
 // Règles modifiables dans « Calendrier fiscal ». md = "MM-JJ".
 const RULES = [
-  { id: 'tva_m', label: 'TVA mensuelle (CA3)', ex: 'Déclaration du mois M déposée le mois M+1.',
-    fields: [{ k: 'jour', label: 'Jour du mois suivant', type: 'day', def: 19 }] },
-  { id: 'tva_t', label: 'TVA trimestrielle (CA3)', ex: 'Déclaration du trimestre déposée le mois qui suit sa fin.',
-    fields: [{ k: 'jour', label: 'Jour du mois suivant', type: 'day', def: 19 }] },
+  { id: 'general', label: 'Règle générale', ex: 'Une échéance qui tombe un samedi, un dimanche ou un jour férié est reportée au premier jour ouvré suivant.',
+    fields: [{ k: 'report', label: 'Reporter au jour ouvré suivant', type: 'bool', def: 1 }] },
+  { id: 'tva_jour', label: 'Jour de dépôt de la TVA (CA3)', ex: 'Le jour du mois suivant dépend de la forme juridique, du siège et du nom ou du SIREN. Vérifiez cette grille avec le calendrier fiscal de l’espace professionnel : un jour forcé sur la fiche d’un dossier prime toujours.',
+    fields: [
+      { k: 'ei_idf_ah', label: 'EI, siège 75/92/93/94, nom A à H', type: 'day', def: 15 },
+      { k: 'ei_idf_iz', label: 'EI, siège 75/92/93/94, nom I à Z', type: 'day', def: 17 },
+      { k: 'ei_ah', label: 'EI, autres départements, nom A à H', type: 'day', def: 16 },
+      { k: 'ei_iz', label: 'EI, autres départements, nom I à Z', type: 'day', def: 19 },
+      { k: 'soc_idf_1', label: 'Sociétés 75/92/93/94, SIREN 00 à 68', type: 'day', def: 19 },
+      { k: 'soc_idf_2', label: 'Sociétés 75/92/93/94, SIREN 69 à 78', type: 'day', def: 20 },
+      { k: 'soc_idf_3', label: 'Sociétés 75/92/93/94, SIREN 79 à 99', type: 'day', def: 21 },
+      { k: 'soc', label: 'Sociétés, autres départements', type: 'day', def: 21 },
+      { k: 'sa_idf', label: 'SA, siège 75/92/93/94', type: 'day', def: 23 },
+      { k: 'sa', label: 'SA, autres départements', type: 'day', def: 24 },
+      { k: 'autre', label: 'Autres redevables', type: 'day', def: 24 },
+      { k: 'defaut', label: 'Forme juridique non renseignée', type: 'day', def: 19 },
+    ] },
   { id: 'ca12', label: 'TVA annuelle (CA12) et acomptes', ex: 'Exercice au 31/12 : date fixe en N+1. Sinon : délai après la clôture.',
     fields: [{ k: 'date', label: 'Date limite N+1 (clôture 31/12)', type: 'md', def: '05-05' },
              { k: 'delai', label: 'Sinon, mois après clôture', type: 'int', min: 1, max: 12, def: 3 },
@@ -336,14 +353,48 @@ const Engine = (() => {
   const is3112 = d => (d.cloture || '12-31') === '12-31';
   const exStart = (d, y) => { const c = closeDate(d, y - 1); return new Date(c.getFullYear(), c.getMonth(), c.getDate() + 1); };
   const has = (d, x) => (d.autres || []).includes(x);
+
+  /** Jour de dépôt de la CA3 pour un dossier, et la raison (affichée dans le détail). */
+  function tvaDay(d, R) {
+    const T = R.tva_jour;
+    if (Number(d.jourTVA) >= 1 && Number(d.jourTVA) <= 31) return { jour: Number(d.jourTVA), why: 'jour forcé sur la fiche du dossier' };
+    const idf = !!d.idf, sir = parseInt(String(d.siren || '').slice(0, 2), 10);
+    const lettre = String(d.nom || '').normalize('NFD').replace(/[^A-Za-z]/g, '').charAt(0).toUpperCase();
+    const ah = lettre && lettre <= 'H';
+    switch (d.forme) {
+      case 'EI': return { jour: idf ? (ah ? T.ei_idf_ah : T.ei_idf_iz) : (ah ? T.ei_ah : T.ei_iz), why: `entreprise individuelle, nom en ${lettre || '?'}${idf ? ', siège 75/92/93/94' : ''}` };
+      case 'SOC': return idf
+        ? { jour: sir <= 68 ? T.soc_idf_1 : sir <= 78 ? T.soc_idf_2 : T.soc_idf_3, why: `société, siège 75/92/93/94, SIREN commençant par ${String(d.siren).slice(0, 2)}` }
+        : { jour: T.soc, why: 'société, hors 75/92/93/94' };
+      case 'SA': return { jour: idf ? T.sa_idf : T.sa, why: `société anonyme${idf ? ', siège 75/92/93/94' : ''}` };
+      case 'AUTRE': return { jour: T.autre, why: 'autre redevable' };
+    }
+    return { jour: T.defaut, why: 'forme juridique non renseignée' };
+  }
+
+  // Jours fériés français et report au premier jour ouvré
+  const ferCache = {};
+  function feries(y) {
+    if (ferCache[y]) return ferCache[y];
+    const a = y % 19, b = Math.floor(y / 100), c = y % 100, dd = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3);
+    const h = (19 * a + b - dd - g + 15) % 30, i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
+    const p = new Date(y, Math.floor((h + l - 7 * m + 114) / 31) - 1, ((h + l - 7 * m + 114) % 31) + 1);
+    const plus = n => new Date(p.getFullYear(), p.getMonth(), p.getDate() + n);
+    return (ferCache[y] = new Set([new Date(y, 0, 1), plus(1), new Date(y, 4, 1), new Date(y, 4, 8), plus(39), plus(50), new Date(y, 6, 14), new Date(y, 7, 15), new Date(y, 10, 1), new Date(y, 10, 11), new Date(y, 11, 25)].map(ymd)));
+  }
+  function nextBusinessDay(dt) {
+    let x = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
+    while (x.getDay() === 0 || x.getDay() === 6 || feries(x.getFullYear()).has(ymd(x))) x = new Date(x.getFullYear(), x.getMonth(), x.getDate() + 1);
+    return x;
+  }
   const isList = r => String(r.mois || '').split(',').map(s => parseInt(s, 10)).filter(n => n >= 1 && n <= 12);
 
   // Une colonne = une échéance de la période. app(d, R) : le dossier est-il concerné ?
   const COLS = [];
   for (let k = 0; k < 12; k++) COLS.push({ id: 'TVA-M' + String(k + 1).padStart(2, '0'), type: 'TVA', grp: 'TVA mensuelle', label: MONTHS[k],
-    app: d => d.tva === 'mensuelle', due: (d, y, R) => clampDate(y, k + 1, R.tva_m.jour) });
+    app: d => d.tva === 'mensuelle', due: (d, y, R) => clampDate(y, k + 1, tvaDay(d, R).jour) });
   for (let q = 1; q <= 4; q++) COLS.push({ id: 'TVA-T' + q, type: 'TVA', grp: 'TVA trimestrielle', label: 'T' + q,
-    app: d => d.tva === 'trimestrielle', due: (d, y, R) => clampDate(y, 3 * q, R.tva_t.jour) });
+    app: d => d.tva === 'trimestrielle', due: (d, y, R) => clampDate(y, 3 * q, tvaDay(d, R).jour) });
   COLS.push({ id: 'TVA-CA12', type: 'TVA', grp: 'TVA annuelle', label: 'CA12',
     app: d => d.tva === 'annuelle', due: (d, y, R) => is3112(d) ? md(y + 1, R.ca12.date) : addMonths(closeDate(d, y), R.ca12.delai) });
   COLS.push({ id: 'TVA-CA12-A1', type: 'TVA', grp: 'TVA annuelle', label: 'Acompte 1',
@@ -390,7 +441,8 @@ const Engine = (() => {
   function cell(d, colId, y, R, stored, today) {
     const c = COL[colId];
     const applicable = profileComplete(d) && c.app(d, R);
-    const due = applicable ? c.due(d, y, R) : (stored && stored.due ? new Date(stored.due + 'T00:00:00') : null);
+    let due = applicable ? c.due(d, y, R) : (stored && stored.due ? new Date(stored.due + 'T00:00:00') : null);
+    if (applicable && R.general.report) due = nextBusinessDay(due);
     const t0 = startOfDay(today);
     if (stored && stored.s === 'fait') return { status: 'fait', applicable, due, at: stored.at, by: stored.by, kept: !applicable };
     if (stored && stored.s === 'nc') return { status: 'nc', manual: true, applicable, due };
@@ -428,7 +480,7 @@ const Engine = (() => {
     return { creates, updates, skipped };
   }
 
-  return { COLS, COL, rules, cell, statusLabel, planImport, profileComplete, ymd, startOfDay };
+  return { COLS, COL, rules, cell, statusLabel, planImport, profileComplete, ymd, startOfDay, tvaDay, nextBusinessDay };
 })();
 
 /* ==========================================================================
@@ -707,10 +759,10 @@ function renderWeek() {
 function renderDossiers() {
   const ds = dossiers();
   const lbl = (list, id) => (list.find(x => x.id === id) || {}).label || '—';
-  $('#dossier-list').innerHTML = ds.length ? `<table class="list"><thead><tr><th>Client</th><th>SIREN</th><th>Collaborateur</th><th>TVA</th><th>Impôt</th><th>Clôture</th><th>Autres</th><th></th></tr></thead><tbody>
+  $('#dossier-list').innerHTML = ds.length ? `<table class="list"><thead><tr><th>Client</th><th>SIREN</th><th>Collaborateur</th><th>TVA</th><th>Jour TVA</th><th>Impôt</th><th>Clôture</th><th>Autres</th><th></th></tr></thead><tbody>
     ${ds.map(d => `<tr><td><b>${esc(d.nom)}</b>${Engine.profileComplete(d) ? '' : ' <span class="tag warn">Profil à compléter</span>'}</td>
       <td class="mono">${esc(d.siren)}</td><td>${esc(collabName(d.collab)) || '—'}</td>
-      <td>${lbl(TVA_REGIMES, d.tva)}</td><td>${d.impot || '—'}</td>
+      <td>${lbl(TVA_REGIMES, d.tva)}</td><td class="mono" title="${esc(Engine.tvaDay(d, R()).why)}">${['mensuelle', 'trimestrielle'].includes(d.tva) ? 'le ' + Engine.tvaDay(d, R()).jour + (d.jourTVA ? ' (forcé)' : '') : '—'}</td><td>${d.impot || '—'}</td>
       <td class="mono">${d.cloture ? d.cloture.split('-').reverse().join('/') : '—'}</td>
       <td>${(d.autres || []).map(a => lbl(AUTRES, a)).join(', ') || '—'}</td>
       <td><button class="btn" data-act="edit" data-siren="${d.siren}">Modifier</button></td></tr>`).join('')}
@@ -733,6 +785,7 @@ function renderCal() {
       let input;
       if (f.type === 'md') input = `<input type="text" id="${id}" name="${f.k}" class="mono" value="${v.split('-').reverse().join('/')}" pattern="\\d{1,2}/\\d{1,2}" placeholder="JJ/MM" required>`;
       else if (f.type === 'list') input = `<input type="text" id="${id}" name="${f.k}" class="mono" value="${esc(v)}" pattern="[0-9, ]+" required>`;
+      else if (f.type === 'bool') input = `<input type="checkbox" id="${id}" name="${f.k}" ${Number(v) ? 'checked' : ''} style="justify-self:start;width:20px;height:20px">`;
       else input = `<input type="number" id="${id}" name="${f.k}" class="mono" value="${v}" min="${f.min || 1}" max="${f.max || 31}" required>`;
       return `<label class="fld" for="${id}"><span>${esc(f.label)}</span>${input}</label>`;
     }).join('')}
@@ -779,6 +832,7 @@ function openCellPop(btn) {
   if (cm.status === 'fait') info = `Fait le ${fmt(new Date(cm.at))}${cm.by ? ' par ' + esc(collabName(cm.by)) : ''}.${cm.kept ? ' Conservé : le profil actuel ne génère plus cette échéance.' : ''}`;
   else if (cm.manual) info = 'Marqué « Non concerné » à la main.';
   info += cm.due ? ` Échéance : ${fmt(cm.due)}.` : '';
+  if (/^TVA-[MT]/.test(col) && cm.applicable) { const t = Engine.tvaDay(d, R()); info += ` Dépôt le ${t.jour} du mois (${esc(t.why)})${cm.due.getDate() !== t.jour ? ', reporté au jour ouvré suivant' : ''}.`; }
   const b = (v, t, cls = '') => `<button class="btn ${cls}" data-act="set" data-siren="${siren}" data-col="${col}" data-y="${y}" data-v="${v}">${t}</button>`;
   pop.innerHTML = `<h4>${esc(d.nom)}</h4><p>${esc(c.grp)} · ${esc(c.label)} · ${y}<br>${info}</p><div class="acts">
     ${cm.status !== 'fait' ? b('fait', 'Marquer fait', 'primary') : ''}
@@ -825,6 +879,12 @@ function openDossier(siren) {
       </div>
       <div><span class="lbl">TVA</span>${radios('tva', TVA_REGIMES, d.tva)}</div>
       <div class="row2">
+        <div><label class="lbl" for="d-forme">Forme juridique</label><select id="d-forme" style="width:100%"><option value="">Non renseignée</option>${FORMES.map(f => `<option value="${f.id}" ${d.forme === f.id ? 'selected' : ''}>${f.label}</option>`).join('')}</select>
+          <label style="display:flex;gap:6px;align-items:center;margin-top:6px;font-size:13px"><input type="checkbox" id="d-idf" ${d.idf ? 'checked' : ''}> Siège à Paris ou en 92, 93, 94</label></div>
+        <div><label class="lbl" for="d-jour">Jour de dépôt TVA forcé</label><input type="number" id="d-jour" class="mono" min="1" max="31" value="${d.jourTVA || ''}" placeholder="auto : le ${Engine.tvaDay(d, R()).jour}" style="width:100%">
+          <span style="font-size:12px;color:var(--muted)">Facultatif : le jour indiqué dans l’espace professionnel du client. Il prime sur la grille.</span></div>
+      </div>
+      <div class="row2">
         <div><span class="lbl">Impôt</span>${radios('impot', IMPOTS, d.impot)}</div>
         <div><span class="lbl">Clôture de l'exercice</span><div style="display:flex;gap:6px">
           <select id="d-cd" aria-label="Jour de clôture">${Array.from({ length: 31 }, (_, i) => i + 1).map(i => `<option ${i === Number(cd) ? 'selected' : ''}>${String(i).padStart(2, '0')}</option>`).join('')}</select>
@@ -856,6 +916,8 @@ async function saveDossier(siren, m) {
     nom, siren: sr, collab: val('#d-collab').value, tva, impot,
     cloture: `${val('#d-cm').value}-${val('#d-cd').value}`,
     autres: [...m.querySelectorAll('input[name=autres]:checked')].map(i => i.value),
+    forme: val('#d-forme').value, idf: val('#d-idf').checked,
+    jourTVA: Number(val('#d-jour').value) >= 1 && Number(val('#d-jour').value) <= 31 ? Number(val('#d-jour').value) : '',
   };
   await guarded(() => Store.set('dossiers', sr, body));
   closeModal(); toast(siren ? 'Dossier mis à jour, échéances recalculées' : 'Dossier créé');
@@ -1008,6 +1070,13 @@ function runChecks() {
   const p2 = Engine.planImport(rows, existing);
   t('Réimport du même fichier : aucun doublon', p1.creates.length === 2 && p2.creates.length === 0 && p2.updates.length === 2,
     `1er import : ${p1.creates.length} créations (doublon interne fusionné, ${p1.skipped} ligne ignorée) · 2e import : ${p2.creates.length} création, ${p2.updates.length} mises à jour`);
+  const td = x => Engine.tvaDay({ ...base, ...x }, Rd).jour;
+  const cas = [['société, SIREN 82…, siège 75', td({ forme: 'SOC', idf: true, siren: '828665014' }), 21], ['société hors Île-de-France', td({ forme: 'SOC', idf: false }), 21],
+    ['EI « Bernard », hors 75/92/93/94', td({ forme: 'EI', nom: 'Bernard' }), 16], ['EI « Martin », hors 75/92/93/94', td({ forme: 'EI', nom: 'Martin' }), 19],
+    ['SA', td({ forme: 'SA' }), 24], ['jour forcé à 15 sur la fiche', td({ forme: 'SOC', jourTVA: 15 }), 15]];
+  t('Jour de dépôt TVA selon forme, siège, nom ou SIREN', cas.every(c => c[1] === c[2]), cas.map(c => `${c[0]} : le ${c[1]}`).join(' · '));
+  const sat = Engine.cell({ ...base, tva: 'mensuelle', forme: 'SOC', idf: true, siren: '100000000' }, 'TVA-M08', y, Rd, undefined, today);
+  t('Échéance un samedi → reportée au lundi', Engine.ymd(sat.due) === '2026-09-21', `TVA d’août (le 19/09/2026 tombe un samedi) → ${fmt(sat.due)}`);
   return out;
 }
 function showChecks() {
@@ -1061,7 +1130,8 @@ document.addEventListener('submit', async e => {
       const l = raw.split(',').map(s => parseInt(s, 10)).filter(n => n >= 1 && n <= 12);
       if (!l.length) { toast(`${f.label} : indiquez des mois entre 1 et 12, séparés par des virgules.`); return; }
       body[f.k] = l.join(',');
-    } else body[f.k] = Number(raw);
+    } else if (f.type === 'bool') body[f.k] = form.elements[f.k].checked ? 1 : 0;
+    else body[f.k] = Number(raw);
   }
   await guarded(() => Store.set('regles', rule.id, body));
   toast(`${rule.label} : enregistré, échéances recalculées`);
