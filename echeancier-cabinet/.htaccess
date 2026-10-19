@@ -1,0 +1,18 @@
+# Échéancier fiscal : protections de base (Apache, hébergement mutualisé)
+Options -Indexes
+DirectoryIndex index.php
+
+# HTTPS obligatoire : retirez les # des 3 lignes suivantes une fois le certificat SSL activé.
+# RewriteEngine On
+# RewriteCond %{HTTPS} off
+# RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+# Fichiers internes jamais servis directement
+<FilesMatch "^(inc\.php|config\.php|LISEZ-MOI\.md|app\.html)$">
+  Require all denied
+</FilesMatch>
+
+<IfModule mod_headers.c>
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set Referrer-Policy "same-origin"
+</IfModule>
