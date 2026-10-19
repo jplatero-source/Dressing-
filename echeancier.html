@@ -190,6 +190,11 @@
   .tests .ko b { color: var(--late); }
   .tests small { display: block; color: var(--muted); }
 
+  .cell .note { font-family: var(--f-body); font-size: 9.5px; max-width: 68px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .grid thead tr.c th small { display: block; font-family: var(--f-mono); font-size: 10.5px; color: var(--muted); font-weight: 400; }
+  .more-rows { display: flex; justify-content: center; gap: 10px; padding: 12px; }
+  .progress-bar { height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; margin: 12px 0; }
+  .progress-bar i { display: block; height: 100%; background: var(--accent); width: 0; transition: width .2s; }
   .toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 9px; z-index: 50; max-width: calc(100vw - 32px); font-size: 13.5px; }
   @media (prefers-reduced-motion: no-preference) { .toast { animation: up .2s ease-out; } @keyframes up { from { transform: translate(-50%, 8px); opacity: 0; } } }
 </style>
@@ -197,8 +202,8 @@
 <header class="bar">
   <div class="bar-top">
     <h1 class="brand">Échéancier <span>fiscal</span></h1>
-    <label class="who">Période
-      <select id="year" aria-label="Exercice ou période"></select></label>
+    <label class="who">Campagne
+      <select id="year" aria-label="Campagne fiscale"></select></label>
     <label class="who">Je suis
       <select id="me" aria-label="Collaborateur connecté"></select></label>
     <button class="btn ghost" id="btn-tests" title="Vérifier le moteur de génération">Vérifications</button>
@@ -220,17 +225,17 @@
       <label class="f">Collaborateur <select id="f-collab"></select></label>
       <label class="f">Mois d'échéance <select id="f-month"></select></label>
       <label class="f">Obligation <select id="f-type"></select></label>
-      <label class="f">Recherche <input type="text" id="f-q" placeholder="Nom ou SIREN"></label>
+      <label class="f">Recherche <input type="text" id="f-q" placeholder="Nom ou n° de dossier"></label>
       <label class="check"><input type="checkbox" id="f-late"> En retard uniquement</label>
       <span class="spacer"></span>
       <button class="btn" id="btn-export">Exporter en Excel</button>
     </div>
-    <div class="grid-wrap" id="grid-wrap"></div>
+    <div class="grid-wrap" id="grid-wrap"><div class="empty">Chargement des dossiers…</div></div>
     <div class="legend">
       <span><i style="background:var(--late-bg);border:1px solid var(--late)"></i>En retard</span>
       <span><i style="background:var(--soon-bg);border:1px solid var(--soon)"></i>Dans les 7 jours</span>
       <span><i style="background:var(--done-bg);border:1px solid var(--done)"></i>Fait</span>
-      <span><i style="background:var(--nc-bg);border:1px solid var(--nc)"></i>Non concerné</span>
+      <span><i style="background:var(--nc-bg);border:1px solid var(--nc)"></i>Non concerné (avec la mention éventuelle : Client, DATA, Déficit…)</span>
       <span>Un clic sur une case « À faire » la passe à « Fait ».</span>
     </div>
   </section>
@@ -239,26 +244,28 @@
 
   <section class="view" id="v-dossiers" hidden>
     <div class="two">
-      <div>
+      <div style="min-width:0">
         <div class="toolbar">
           <button class="btn primary" id="btn-new">Nouveau dossier</button>
           <label class="btn" for="file-import">Importer un fichier Excel</label>
           <input type="file" id="file-import" accept=".xlsx,.xls,.csv" hidden>
-          <span class="lead" style="margin:0">Colonnes reconnues : nom du client, SIREN, collaborateur. Le SIREN sert d'identifiant : un réimport met à jour sans dupliquer.</span>
+          <input type="text" id="d-q" placeholder="Rechercher un dossier" aria-label="Rechercher un dossier">
         </div>
+        <p class="lead" style="margin:0 0 10px">L’import lit votre tableau « Suivi échéances fiscales » (n° Agility, collaborateurs, clôture, forme, IS/IR, colonnes d’échéances) ou une simple liste (nom, SIREN ou n° de dossier, collaborateur). Le n° de dossier évite les doublons : un réimport met à jour sans dupliquer.</p>
         <div class="list-wrap" id="dossier-list"></div>
       </div>
       <div class="card">
         <h3>Collaborateurs</h3>
+        <p class="lead" style="font-size:12.5px;margin:0 0 8px">Les initiales viennent de votre tableau. Remplacez-les par le nom complet si vous voulez.</p>
         <div id="collab-list"></div>
-        <div class="collab-row"><input type="text" id="collab-new" placeholder="Prénom Nom"><button class="btn" id="collab-add">Ajouter</button></div>
+        <div class="collab-row"><input type="text" id="collab-new" placeholder="Initiales ou nom"><button class="btn" id="collab-add">Ajouter</button></div>
       </div>
     </div>
   </section>
 
   <section class="view" id="v-cal" hidden>
     <h2 class="h2">Calendrier fiscal</h2>
-    <p class="lead">Une ligne par type d'obligation. Les dates sont recalculées pour tous les dossiers dès l'enregistrement. « N+1 » désigne l'année qui suit la période suivie.</p>
+    <p class="lead">Une ligne par type d'obligation. Les dates sont recalculées pour tous les dossiers dès l'enregistrement. « N+1 » désigne l'année qui suit la période concernée.</p>
     <div class="rules" id="rules"></div>
   </section>
 </main>
@@ -267,30 +274,36 @@
 
 <script>
 /* ==========================================================================
-   Référentiel : obligations, colonnes et règles de calcul par défaut
+   Référentiel
    ========================================================================== */
 const MONTHS = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
 const MONTHS_LONG = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+const pad = n => String(n).padStart(2, '0');
 const TVA_REGIMES = [
   { id: 'mensuelle', label: 'Mensuelle' }, { id: 'trimestrielle', label: 'Trimestrielle' },
   { id: 'annuelle', label: 'Annuelle (CA12)' }, { id: 'non', label: 'Non assujetti' },
 ];
-const FORMES = [
-  { id: 'EI', label: 'Entreprise individuelle' }, { id: 'SOC', label: 'Société (SARL, SAS, SNC…)' },
-  { id: 'SA', label: 'Société anonyme (SA)' }, { id: 'AUTRE', label: 'Autre (association, SCI…)' },
-];
 const IMPOTS = [{ id: 'IS', label: 'IS' }, { id: 'IR', label: 'IR' }];
-const AUTRES = [{ id: 'CFE', label: 'CFE' }, { id: 'CVAE', label: 'CVAE' }, { id: 'DAS2', label: 'DAS2' }, { id: 'TVS', label: 'Taxes sur les véhicules' }];
+const FORMES = [
+  { id: 'EI', label: 'Entreprise individuelle / particulier' }, { id: 'SOC', label: 'Société (SARL, SAS, SNC…)' },
+  { id: 'SA', label: 'Société anonyme (SA)' }, { id: 'AUTRE', label: 'Autre (SCI, SC, association…)' },
+];
+const AUTRES = [
+  { id: 'CFE', label: 'CFE (solde)' }, { id: 'CFEAC', label: 'Acompte CFE' }, { id: 'CVAE', label: 'CVAE' },
+  { id: 'DAS2', label: 'DAS2' }, { id: 'TVS', label: 'Taxes sur les véhicules' }, { id: 'IFU', label: 'IFU (2561)' }, { id: 'TF', label: 'Taxe foncière' },
+];
 const TYPES = [
   { id: 'TVA', label: 'TVA' }, { id: 'IS', label: 'Impôt sur les sociétés' }, { id: 'IR', label: 'Impôt sur le revenu' },
-  { id: 'CFE', label: 'CFE' }, { id: 'CVAE', label: 'CVAE' }, { id: 'DAS2', label: 'DAS2' }, { id: 'TVS', label: 'Taxes véhicules' },
+  { id: 'CVAE', label: 'CVAE' }, { id: 'CFE', label: 'CFE' }, { id: 'DAS2', label: 'DAS2' }, { id: 'TVS', label: 'Taxes véhicules' },
+  { id: 'IFU', label: 'IFU (2561)' }, { id: 'TF', label: 'Taxe foncière' },
 ];
 
-// Règles modifiables dans « Calendrier fiscal ». md = "MM-JJ".
 const RULES = [
   { id: 'general', label: 'Règle générale', ex: 'Une échéance qui tombe un samedi, un dimanche ou un jour férié est reportée au premier jour ouvré suivant.',
     fields: [{ k: 'report', label: 'Reporter au jour ouvré suivant', type: 'bool', def: 1 }] },
-  { id: 'tva_jour', label: 'Jour de dépôt de la TVA (CA3)', ex: 'Le jour du mois suivant dépend de la forme juridique, du siège et du nom ou du SIREN. Vérifiez cette grille avec le calendrier fiscal de l’espace professionnel : un jour forcé sur la fiche d’un dossier prime toujours.',
+  { id: 'campagne', label: 'Campagne', ex: 'Le tableau couvre 12 mois d’échéances à partir de ce mois (septembre → août dans votre tableau actuel).',
+    fields: [{ k: 'mois', label: 'Premier mois (1 à 12)', type: 'int', min: 1, max: 12, def: 9 }] },
+  { id: 'tva_jour', label: 'Jour de dépôt de la TVA (CA3)', ex: 'Jour du mois qui suit la période. Dépend de la forme juridique, du siège et du nom ou du SIREN. Vérifiez cette grille avec le calendrier fiscal de l’espace professionnel : un jour forcé sur la fiche d’un dossier prime toujours.',
     fields: [
       { k: 'ei_idf_ah', label: 'EI, siège 75/92/93/94, nom A à H', type: 'day', def: 15 },
       { k: 'ei_idf_iz', label: 'EI, siège 75/92/93/94, nom I à Z', type: 'day', def: 17 },
@@ -311,9 +324,8 @@ const RULES = [
              { k: 'nb', label: "Nombre d'acomptes", type: 'int', min: 0, max: 2, def: 2 },
              { k: 'a1', label: '1er acompte', type: 'md', def: '07-15' },
              { k: 'a2', label: '2e acompte', type: 'md', def: '12-15' }] },
-  { id: 'is_ac', label: "Acomptes d'IS", ex: "Le 15 du 3e, 6e, 9e et 12e mois de l'exercice.",
-    fields: [{ k: 'jour', label: 'Jour', type: 'day', def: 15 },
-             { k: 'mois', label: "Mois de l'exercice", type: 'list', def: '3,6,9,12' }] },
+  { id: 'is_ac', label: "Acomptes d'IS", ex: "Le 15 mars, 15 juin, 15 septembre et 15 décembre : les 4 dates comprises dans l'exercice, quelle que soit la clôture.",
+    fields: [{ k: 'jour', label: 'Jour', type: 'day', def: 15 }, { k: 'mois', label: 'Mois des acomptes', type: 'list', def: '3,6,9,12' }] },
   { id: 'is_solde', label: "Solde d'IS (2572)", ex: 'Clôture 31/12 : date fixe en N+1. Sinon : le 15 du 4e mois après la clôture.',
     fields: [{ k: 'date', label: 'Date limite N+1 (clôture 31/12)', type: 'md', def: '05-15' },
              { k: 'delai', label: 'Sinon, mois après clôture', type: 'int', min: 1, max: 12, def: 4 },
@@ -321,40 +333,47 @@ const RULES = [
   { id: 'is_liasse', label: 'Liasse IS (2065)', ex: 'Clôture 31/12 : date fixe en N+1. Sinon : fin du 3e mois après la clôture.',
     fields: [{ k: 'date', label: 'Date limite N+1 (clôture 31/12)', type: 'md', def: '05-20' },
              { k: 'delai', label: 'Sinon, mois après clôture', type: 'int', min: 1, max: 12, def: 3 }] },
-  { id: 'ir_liasse', label: 'Liasse IR (2031 / 2035)', ex: 'Résultats de la période, déposés en N+1.',
+  { id: 'ir_liasse', label: 'Liasse IR (2031 / 2035 / 2072)', ex: 'Résultats de la période, déposés en N+1.',
     fields: [{ k: 'date', label: 'Date limite N+1', type: 'md', def: '05-20' }] },
-  { id: 'cfe', label: 'CFE', ex: 'Paiement du solde de la période.',
-    fields: [{ k: 'date', label: 'Date limite', type: 'md', def: '12-15' }] },
-  { id: 'cvae', label: 'CVAE', ex: 'Deux acomptes dans la période, solde (1329-DEF) en N+1.',
-    fields: [{ k: 'a1', label: '1er acompte', type: 'md', def: '06-15' },
-             { k: 'a2', label: '2e acompte', type: 'md', def: '09-15' },
-             { k: 'solde', label: 'Solde N+1', type: 'md', def: '05-05' }] },
-  { id: 'das2', label: 'DAS2', ex: 'Honoraires versés pendant la période, déclarés en N+1.',
-    fields: [{ k: 'date', label: 'Date limite N+1', type: 'md', def: '05-20' }] },
-  { id: 'tvs', label: 'Taxes sur les véhicules', ex: 'Taxes de la période, déclarées en janvier N+1.',
-    fields: [{ k: 'date', label: 'Date limite N+1', type: 'md', def: '01-25' }] },
+  { id: 'cvae', label: 'CVAE', ex: 'Deux acomptes dans la période ; solde 1329-DEF et déclaration 1330 en N+1.',
+    fields: [{ k: 'a1', label: '1er acompte', type: 'md', def: '06-15' }, { k: 'a2', label: '2e acompte', type: 'md', def: '09-15' },
+             { k: 'solde', label: 'Solde 1329-DEF N+1', type: 'md', def: '05-05' }, { k: 'd1330', label: 'Déclaration 1330 N+1', type: 'md', def: '05-20' }] },
+  { id: 'cfe', label: 'CFE', ex: 'Acompte (si CFE de l’an dernier ≥ 3 000 €) et solde de la période.',
+    fields: [{ k: 'acompte', label: 'Acompte', type: 'md', def: '06-15' }, { k: 'date', label: 'Solde', type: 'md', def: '12-15' }] },
+  { id: 'das2', label: 'DAS2', ex: 'Honoraires versés pendant la période, déclarés en N+1.', fields: [{ k: 'date', label: 'Date limite N+1', type: 'md', def: '05-20' }] },
+  { id: 'tvs', label: 'Taxes sur les véhicules', ex: 'Taxes de la période, déclarées en janvier N+1.', fields: [{ k: 'date', label: 'Date limite N+1', type: 'md', def: '01-25' }] },
+  { id: 'ifu', label: 'IFU (2561)', ex: 'Revenus de capitaux mobiliers versés pendant la période, déclarés en N+1.', fields: [{ k: 'date', label: 'Date limite N+1', type: 'md', def: '02-15' }] },
+  { id: 'tf', label: 'Taxe foncière', ex: 'Avis de la période (paiement).', fields: [{ k: 'date', label: 'Date limite', type: 'md', def: '10-15' }] },
 ];
 
 /* ==========================================================================
-   Moteur : calcul des échéances (fonctions pures, testées dans « Vérifications »)
+   Moteur : échéances (fonctions pures, testées dans « Vérifications »)
    ========================================================================== */
 const Engine = (() => {
+  const ymd = dt => `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`;
+  const ym = dt => `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}`;
+  const startOfDay = dt => new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
+  function clampDate(y, m, d) { const last = new Date(y, m + 1, 0).getDate(); return new Date(y, m, Math.min(d, last)); }
   const md = (y, s) => { const [m, d] = s.split('-').map(Number); return clampDate(y, m - 1, d); };
-  function clampDate(y, m, d) {
-    const last = new Date(y, m + 1, 0).getDate();
-    return new Date(y, m, Math.min(d, last));
-  }
   const isEOM = dt => new Date(dt.getFullYear(), dt.getMonth(), dt.getDate() + 1).getDate() === 1;
-  function addMonths(dt, n) {
-    const t = clampDate(dt.getFullYear(), dt.getMonth() + n, dt.getDate());
-    return isEOM(dt) ? new Date(t.getFullYear(), t.getMonth() + 1, 0) : t;
-  }
+  function addMonths(dt, n) { const t = clampDate(dt.getFullYear(), dt.getMonth() + n, dt.getDate()); return isEOM(dt) ? new Date(t.getFullYear(), t.getMonth() + 1, 0) : t; }
   const closeDate = (d, y) => md(y, d.cloture || '12-31');
   const is3112 = d => (d.cloture || '12-31') === '12-31';
   const exStart = (d, y) => { const c = closeDate(d, y - 1); return new Date(c.getFullYear(), c.getMonth(), c.getDate() + 1); };
   const has = (d, x) => (d.autres || []).includes(x);
+  const isList = r => String(r.mois || '').split(',').map(s => parseInt(s, 10)).filter(n => n >= 1 && n <= 12);
+  /** Acomptes d'IS de l'exercice clos en y : les dates fixes (15/03, 15/06, 15/09, 15/12) comprises dans l'exercice. */
+  function isDates(d, y, R) {
+    const s = exStart(d, y), e = closeDate(d, y), out = [];
+    for (let k = 0; k < 15 && out.length < 4; k++) {
+      const dt = new Date(s.getFullYear(), s.getMonth() + k, 1);
+      if (!isList(R.is_ac).includes(dt.getMonth() + 1)) continue;
+      const due = clampDate(dt.getFullYear(), dt.getMonth(), R.is_ac.jour);
+      if (due >= s && due <= e) out.push(due);
+    }
+    return out;
+  }
 
-  /** Jour de dépôt de la CA3 pour un dossier, et la raison (affichée dans le détail). */
   function tvaDay(d, R) {
     const T = R.tva_jour;
     if (Number(d.jourTVA) >= 1 && Number(d.jourTVA) <= 31) return { jour: Number(d.jourTVA), why: 'jour forcé sur la fiche du dossier' };
@@ -363,16 +382,15 @@ const Engine = (() => {
     const ah = lettre && lettre <= 'H';
     switch (d.forme) {
       case 'EI': return { jour: idf ? (ah ? T.ei_idf_ah : T.ei_idf_iz) : (ah ? T.ei_ah : T.ei_iz), why: `entreprise individuelle, nom en ${lettre || '?'}${idf ? ', siège 75/92/93/94' : ''}` };
-      case 'SOC': return idf
+      case 'SOC': return idf && d.siren
         ? { jour: sir <= 68 ? T.soc_idf_1 : sir <= 78 ? T.soc_idf_2 : T.soc_idf_3, why: `société, siège 75/92/93/94, SIREN commençant par ${String(d.siren).slice(0, 2)}` }
-        : { jour: T.soc, why: 'société, hors 75/92/93/94' };
+        : { jour: T.soc, why: idf ? 'société, siège 75/92/93/94 (SIREN inconnu)' : 'société, hors 75/92/93/94' };
       case 'SA': return { jour: idf ? T.sa_idf : T.sa, why: `société anonyme${idf ? ', siège 75/92/93/94' : ''}` };
       case 'AUTRE': return { jour: T.autre, why: 'autre redevable' };
     }
     return { jour: T.defaut, why: 'forme juridique non renseignée' };
   }
 
-  // Jours fériés français et report au premier jour ouvré
   const ferCache = {};
   function feries(y) {
     if (ferCache[y]) return ferCache[y];
@@ -383,164 +401,378 @@ const Engine = (() => {
     return (ferCache[y] = new Set([new Date(y, 0, 1), plus(1), new Date(y, 4, 1), new Date(y, 4, 8), plus(39), plus(50), new Date(y, 6, 14), new Date(y, 7, 15), new Date(y, 10, 1), new Date(y, 10, 11), new Date(y, 11, 25)].map(ymd)));
   }
   function nextBusinessDay(dt) {
-    let x = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
+    let x = startOfDay(dt);
     while (x.getDay() === 0 || x.getDay() === 6 || feries(x.getFullYear()).has(ymd(x))) x = new Date(x.getFullYear(), x.getMonth(), x.getDate() + 1);
     return x;
   }
-  const isList = r => String(r.mois || '').split(',').map(s => parseInt(s, 10)).filter(n => n >= 1 && n <= 12);
 
-  // Une colonne = une échéance de la période. app(d, R) : le dossier est-il concerné ?
+  // Une colonne du moteur = une échéance d'une période y. slot : regroupement dans le tableau de campagne.
   const COLS = [];
-  for (let k = 0; k < 12; k++) COLS.push({ id: 'TVA-M' + String(k + 1).padStart(2, '0'), type: 'TVA', grp: 'TVA mensuelle', label: MONTHS[k],
+  for (let k = 0; k < 12; k++) COLS.push({ id: 'TVA-M' + pad(k + 1), type: 'TVA', grp: 'TVA', tvaMonth: k + 1, label: 'TVA ' + MONTHS[k],
     app: d => d.tva === 'mensuelle', due: (d, y, R) => clampDate(y, k + 1, tvaDay(d, R).jour) });
-  for (let q = 1; q <= 4; q++) COLS.push({ id: 'TVA-T' + q, type: 'TVA', grp: 'TVA trimestrielle', label: 'T' + q,
+  for (let q = 1; q <= 4; q++) COLS.push({ id: 'TVA-T' + q, type: 'TVA', grp: 'TVA', tvaQuarter: q, label: 'TVA T' + q,
     app: d => d.tva === 'trimestrielle', due: (d, y, R) => clampDate(y, 3 * q, tvaDay(d, R).jour) });
-  COLS.push({ id: 'TVA-CA12', type: 'TVA', grp: 'TVA annuelle', label: 'CA12',
+  COLS.push({ id: 'TVA-CA12', type: 'TVA', grp: 'TVA annuelle', slot: 'TVA-CA12', label: 'Solde CA12',
     app: d => d.tva === 'annuelle', due: (d, y, R) => is3112(d) ? md(y + 1, R.ca12.date) : addMonths(closeDate(d, y), R.ca12.delai) });
-  COLS.push({ id: 'TVA-CA12-A1', type: 'TVA', grp: 'TVA annuelle', label: 'Acompte 1',
+  COLS.push({ id: 'TVA-CA12-A1', type: 'TVA', grp: 'TVA annuelle', slot: 'CA12-AC', label: 'Acompte CA12',
     app: (d, R) => d.tva === 'annuelle' && R.ca12.nb >= 1, due: (d, y, R) => md(y, R.ca12.a1) });
-  COLS.push({ id: 'TVA-CA12-A2', type: 'TVA', grp: 'TVA annuelle', label: 'Acompte 2',
+  COLS.push({ id: 'TVA-CA12-A2', type: 'TVA', grp: 'TVA annuelle', slot: 'CA12-AC', label: 'Acompte CA12',
     app: (d, R) => d.tva === 'annuelle' && R.ca12.nb >= 2, due: (d, y, R) => md(y, R.ca12.a2) });
-  for (let i = 0; i < 4; i++) COLS.push({ id: 'IS-A' + (i + 1), type: 'IS', grp: 'Impôt sur les sociétés', label: 'Acompte ' + (i + 1),
-    app: (d, R) => d.impot === 'IS' && isList(R.is_ac).length > i,
-    due: (d, y, R) => { const s = exStart(d, y), m = isList(R.is_ac)[i]; return clampDate(s.getFullYear(), s.getMonth() + m - 1, R.is_ac.jour); } });
-  COLS.push({ id: 'IS-SOLDE', type: 'IS', grp: 'Impôt sur les sociétés', label: 'Solde',
-    app: d => d.impot === 'IS',
+  for (let i = 0; i < 4; i++) COLS.push({ id: 'IS-A' + (i + 1), type: 'IS', grp: 'Impôt sur les sociétés', slot: 'IS-AC', label: 'Acompte IS',
+    app: (d, R) => d.impot === 'IS' && isList(R.is_ac).length > i && !!d.cloture,
+    due: (d, y, R) => isDates(d, y, R)[i] || null });
+  COLS.push({ id: 'IS-SOLDE', type: 'IS', grp: 'Impôt sur les sociétés', slot: 'IS-SOLDE', label: 'Solde 2572', app: d => d.impot === 'IS',
     due: (d, y, R) => { if (is3112(d)) return md(y + 1, R.is_solde.date); const c = closeDate(d, y); return clampDate(c.getFullYear(), c.getMonth() + R.is_solde.delai, R.is_solde.jour); } });
-  COLS.push({ id: 'IS-LIASSE', type: 'IS', grp: 'Impôt sur les sociétés', label: 'Liasse',
-    app: d => d.impot === 'IS', due: (d, y, R) => is3112(d) ? md(y + 1, R.is_liasse.date) : addMonths(closeDate(d, y), R.is_liasse.delai) });
-  COLS.push({ id: 'IR-LIASSE', type: 'IR', grp: 'Impôt sur le revenu', label: 'Liasse',
-    app: d => d.impot === 'IR', due: (d, y, R) => md(y + 1, R.ir_liasse.date) });
-  COLS.push({ id: 'CFE', type: 'CFE', grp: 'CFE', label: 'Solde', app: d => has(d, 'CFE'), due: (d, y, R) => md(y, R.cfe.date) });
-  COLS.push({ id: 'CVAE-A1', type: 'CVAE', grp: 'CVAE', label: 'Acompte 1', app: d => has(d, 'CVAE'), due: (d, y, R) => md(y, R.cvae.a1) });
-  COLS.push({ id: 'CVAE-A2', type: 'CVAE', grp: 'CVAE', label: 'Acompte 2', app: d => has(d, 'CVAE'), due: (d, y, R) => md(y, R.cvae.a2) });
-  COLS.push({ id: 'CVAE-SOLDE', type: 'CVAE', grp: 'CVAE', label: 'Solde', app: d => has(d, 'CVAE'), due: (d, y, R) => md(y + 1, R.cvae.solde) });
-  COLS.push({ id: 'DAS2', type: 'DAS2', grp: 'DAS2', label: 'Déclaration', app: d => has(d, 'DAS2'), due: (d, y, R) => md(y + 1, R.das2.date) });
-  COLS.push({ id: 'TVS', type: 'TVS', grp: 'Taxes véhicules', label: 'Déclaration', app: d => has(d, 'TVS'), due: (d, y, R) => md(y + 1, R.tvs.date) });
+  COLS.push({ id: 'IS-LIASSE', type: 'IS', grp: 'Impôt sur les sociétés', slot: 'IS-LIASSE', label: 'Liasse 2065', app: d => d.impot === 'IS',
+    due: (d, y, R) => is3112(d) ? md(y + 1, R.is_liasse.date) : addMonths(closeDate(d, y), R.is_liasse.delai) });
+  COLS.push({ id: 'IR-LIASSE', type: 'IR', grp: 'Impôt sur le revenu', slot: 'IR-LIASSE', label: 'Liasse IR', app: d => d.impot === 'IR', due: (d, y, R) => md(y + 1, R.ir_liasse.date) });
+  COLS.push({ id: 'CVAE-A1', type: 'CVAE', grp: 'CVAE', slot: 'CVAE-AC', label: 'Acompte CVAE', app: d => has(d, 'CVAE'), due: (d, y, R) => md(y, R.cvae.a1) });
+  COLS.push({ id: 'CVAE-A2', type: 'CVAE', grp: 'CVAE', slot: 'CVAE-AC', label: 'Acompte CVAE', app: d => has(d, 'CVAE'), due: (d, y, R) => md(y, R.cvae.a2) });
+  COLS.push({ id: 'CVAE-SOLDE', type: 'CVAE', grp: 'CVAE', slot: 'CVAE-SOLDE', label: 'Solde 1329', app: d => has(d, 'CVAE'), due: (d, y, R) => md(y + 1, R.cvae.solde) });
+  COLS.push({ id: 'CVAE-1330', type: 'CVAE', grp: 'CVAE', slot: 'CVAE-1330', label: '1330', app: d => has(d, 'CVAE'), due: (d, y, R) => md(y + 1, R.cvae.d1330) });
+  COLS.push({ id: 'CFE-AC', type: 'CFE', grp: 'CFE', slot: 'CFE-AC', label: 'Acompte CFE', app: d => has(d, 'CFEAC'), due: (d, y, R) => md(y, R.cfe.acompte) });
+  COLS.push({ id: 'CFE', type: 'CFE', grp: 'CFE', slot: 'CFE', label: 'Solde CFE', app: d => has(d, 'CFE'), due: (d, y, R) => md(y, R.cfe.date) });
+  COLS.push({ id: 'DAS2', type: 'DAS2', grp: 'DAS2', slot: 'DAS2', label: 'DAS2', app: d => has(d, 'DAS2'), due: (d, y, R) => md(y + 1, R.das2.date) });
+  COLS.push({ id: 'TVS', type: 'TVS', grp: 'Taxes véhicules', slot: 'TVS', label: 'TVS', app: d => has(d, 'TVS'), due: (d, y, R) => md(y + 1, R.tvs.date) });
+  COLS.push({ id: 'IFU', type: 'IFU', grp: 'IFU 2561', slot: 'IFU', label: '2561', app: d => has(d, 'IFU'), due: (d, y, R) => md(y + 1, R.ifu.date) });
+  COLS.push({ id: 'TF', type: 'TF', grp: 'Taxe foncière', slot: 'TF', label: 'Taxe foncière', app: d => has(d, 'TF'), due: (d, y, R) => md(y, R.tf.date) });
   const COL = Object.fromEntries(COLS.map(c => [c.id, c]));
+  const GROUP_ORDER = ['TVA', 'TVA annuelle', 'Impôt sur les sociétés', 'Impôt sur le revenu', 'CVAE', 'CFE', 'DAS2', 'Taxes véhicules', 'IFU 2561', 'Taxe foncière'];
+  const SLOT_ORDER = ['TVA', 'CA12-AC', 'TVA-CA12', 'IS-AC', 'IS-SOLDE', 'IS-LIASSE', 'IR-LIASSE', 'CVAE-AC', 'CVAE-SOLDE', 'CVAE-1330', 'CFE-AC', 'CFE', 'DAS2', 'TVS', 'IFU', 'TF'];
+  const SLOT_INFO = Object.fromEntries(COLS.filter(c => c.slot).map(c => [c.slot, { grp: c.grp, label: c.label, type: c.type }]));
+  SLOT_INFO.TVA = { grp: 'TVA', label: 'TVA', type: 'TVA' };
 
   function rules(overrides = {}) {
     const R = {};
     for (const r of RULES) {
       R[r.id] = {};
-      for (const f of r.fields) {
-        const v = overrides[r.id] && overrides[r.id][f.k];
-        R[r.id][f.k] = (v === undefined || v === null || v === '') ? f.def : v;
-      }
+      for (const f of r.fields) { const v = overrides[r.id] && overrides[r.id][f.k]; R[r.id][f.k] = (v === undefined || v === null || v === '') ? f.def : v; }
     }
     return R;
   }
   const profileComplete = d => !!(d.tva && d.impot && d.cloture);
-  const startOfDay = dt => new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
-  const ymd = dt => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+  const stOf = (d, y, col) => { const s = d.statuts && d.statuts[y] && d.statuts[y][col]; return s || undefined; };
 
-  /**
-   * État d'une case. stored = statut enregistré pour (dossier, colonne, période) ou undefined.
-   * Un statut « Fait » est toujours conservé, même si le profil ne génère plus cette échéance.
-   */
+  /** État d'une case. Un « Fait » est toujours conservé, même si le profil ne génère plus l'échéance. */
   function cell(d, colId, y, R, stored, today) {
     const c = COL[colId];
-    const applicable = profileComplete(d) && c.app(d, R);
+    let applicable = profileComplete(d) && c.app(d, R);
     let due = applicable ? c.due(d, y, R) : (stored && stored.due ? new Date(stored.due + 'T00:00:00') : null);
+    if (applicable && !due) { applicable = false; due = stored && stored.due ? new Date(stored.due + 'T00:00:00') : null; }
     if (applicable && R.general.report) due = nextBusinessDay(due);
-    const t0 = startOfDay(today);
-    if (stored && stored.s === 'fait') return { status: 'fait', applicable, due, at: stored.at, by: stored.by, kept: !applicable };
-    if (stored && stored.s === 'nc') return { status: 'nc', manual: true, applicable, due };
-    if (!applicable) return { status: 'nc', applicable, due: null };
-    const days = Math.round((startOfDay(due) - t0) / 864e5);
-    return { status: 'afaire', applicable, due, late: days < 0, soon: days >= 0 && days <= 7, days };
+    const note = stored && stored.note || '';
+    if (stored && stored.s === 'fait') return { status: 'fait', applicable, due, at: stored.at, by: stored.by, note, kept: !applicable };
+    if (stored && stored.s === 'nc') return { status: 'nc', manual: true, applicable, due, note };
+    if (!applicable) return { status: 'nc', applicable, due: null, note: '' };
+    const days = Math.round((startOfDay(due) - startOfDay(today)) / 864e5);
+    return { status: 'afaire', applicable, due, late: days < 0, soon: days >= 0 && days <= 7, days, note: '' };
   }
-
-  // Libellé commun à l'écran et à l'export (garantit des statuts identiques).
   function statusLabel(cm) {
     if (cm.status === 'fait') return 'Fait';
-    if (cm.status === 'nc') return 'Non concerné';
-    if (cm.late) return 'En retard';
-    return 'À faire';
+    if (cm.status === 'nc') return cm.note ? 'Non concerné – ' + cm.note : 'Non concerné';
+    return cm.late ? 'En retard' : 'À faire';
   }
 
-  /** Prépare un import : normalise, déduplique par SIREN, sépare créations et mises à jour. */
-  function planImport(rows, existing) {
-    const norm = s => String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
-    let hi = rows.findIndex(r => r.some(c => norm(c).includes('siren') || norm(c).includes('siret')));
-    if (hi < 0) return { error: 'Aucune colonne « SIREN » trouvée dans la première feuille.' };
-    const head = rows[hi].map(norm);
-    const find = keys => head.findIndex(h => keys.some(k => h.includes(k)));
-    const iS = find(['siren', 'siret']), iN = find(['nom', 'client', 'raison', 'denomination', 'societe', 'dossier']), iC = find(['collab', 'responsable', 'gestionnaire', 'charge']);
-    const out = new Map(); let skipped = 0;
-    for (const r of rows.slice(hi + 1)) {
-      if (!r || r.every(c => String(c ?? '').trim() === '')) continue;
-      let siren = String(r[iS] ?? '').replace(/\D/g, '');
-      if (siren.length === 14) siren = siren.slice(0, 9);
-      if (siren.length !== 9) { skipped++; continue; }
-      out.set(siren, { siren, nom: String(iN >= 0 ? r[iN] ?? '' : '').trim() || 'Dossier ' + siren, collabName: iC >= 0 ? String(r[iC] ?? '').trim() : '' });
+  /** Fenêtre de la campagne Y : 12 mois à partir du mois de départ. */
+  function campaign(Y, R) {
+    const m0 = Number(R.campagne.mois) || 9;
+    const start = new Date(Y, m0 - 1, 1), end = new Date(Y + 1, m0 - 1, 1);
+    const last = new Date(Y + 1, m0 - 2, 1);
+    return { Y, start, end, label: `${MONTHS_LONG[start.getMonth()]} ${start.getFullYear()} → ${MONTHS_LONG[last.getMonth()]} ${last.getFullYear()}` };
+  }
+  const currentCampaignYear = (today, R) => today.getMonth() + 1 >= (Number(R.campagne.mois) || 9) ? today.getFullYear() : today.getFullYear() - 1;
+
+  /**
+   * Cases d'un dossier dans une campagne : clé de colonne → {col, y}.
+   * TVA : une colonne par mois de période (« TVA 09/2026 » = TVA de septembre 2026, ou T3 si trimestrielle).
+   * Autres : regroupées par type et par mois d'échéance (« Acompte IS 09/2026 »).
+   */
+  function refsFor(d, camp, R) {
+    const refs = {};
+    for (let i = 0; i < 12; i++) {
+      const dt = new Date(camp.start.getFullYear(), camp.start.getMonth() + i, 1), m = dt.getMonth() + 1, y = dt.getFullYear();
+      let col = 'TVA-M' + pad(m);
+      if (m % 3 === 0) {
+        const q = 'TVA-T' + (m / 3), sm = stOf(d, y, col), sq = stOf(d, y, q);
+        if (d.tva === 'trimestrielle' ? !(sm && sm.s === 'fait' && !sq) : (sq && !sm)) col = q;
+      }
+      refs['TVA@' + ym(dt)] = { col, y };
     }
-    const creates = [], updates = [];
-    for (const row of out.values()) (existing.has(row.siren) ? updates : creates).push(row);
-    return { creates, updates, skipped };
+    const complete = profileComplete(d);
+    for (const c of COLS) {
+      if (!c.slot) continue;
+      for (const y of [camp.Y - 1, camp.Y, camp.Y + 1]) {
+        const st = stOf(d, y, c.id), app = complete && c.app(d, R);
+        if (!app && !st) continue;
+        const raw = app ? c.due(d, y, R) : (st.due ? new Date(st.due + 'T00:00:00') : null);
+        if (!raw || raw < camp.start || raw >= camp.end) continue;
+        const key = c.slot + '@' + ym(raw);
+        if (!refs[key] || app) refs[key] = { col: c.id, y };
+      }
+    }
+    return refs;
   }
+  const slotOf = key => key.split('@')[0];
+  function keyLabel(key) {
+    const [slot, m] = key.split('@'), [yy, mm] = m.split('-');
+    return { slot, grp: SLOT_INFO[slot].grp, type: SLOT_INFO[slot].type, label: slot === 'TVA' ? `${mm}/${yy}` : SLOT_INFO[slot].label, month: `${mm}/${yy}` };
+  }
+  const keyOrder = (a, b) => {
+    const sa = slotOf(a), sb = slotOf(b);
+    const ga = GROUP_ORDER.indexOf(SLOT_INFO[sa].grp), gb = GROUP_ORDER.indexOf(SLOT_INFO[sb].grp);
+    return ga - gb || SLOT_ORDER.indexOf(sa) - SLOT_ORDER.indexOf(sb) || a.localeCompare(b);
+  };
 
-  return { COLS, COL, rules, cell, statusLabel, planImport, profileComplete, ymd, startOfDay, tvaDay, nextBusinessDay };
+  return { COLS, COL, rules, cell, statusLabel, campaign, currentCampaignYear, refsFor, keyLabel, keyOrder, profileComplete, ymd, ym, startOfDay, tvaDay, nextBusinessDay, stOf };
 })();
 
 /* ==========================================================================
-   Stockage : base partagée de l'artefact (db), ou stockage local en secours
+   Import du tableau de suivi (format du cabinet) et des listes simples
    ========================================================================== */
-const COLLS = ['dossiers', 'collaborateurs', 'regles', 'statuts'];
+const Importer = (() => {
+  const norm = s => String(s == null ? '' : s).replace(/ /g, ' ').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const isBlank = v => v == null || String(v).replace(/ /g, '').trim() === '';
+  const NON = new Set(['non', 'na', 'n/a', 'nn', 'non deficit', 'n.a.', '-']);
+  const toDate = v => v instanceof Date && !isNaN(v) ? v : null;
+
+  function parseTextDate(s) {
+    const m = String(s).match(/(\d{1,2})\s*\/\s*(\d{1,2})(?:\s*\/\s*(\d{2,4}))?/);
+    if (!m) return null;
+    const dd = +m[1], mm = +m[2]; let yy = m[3] ? +m[3] : null;
+    if (yy !== null && yy < 100) yy += 2000;
+    if (dd < 1 || dd > 31 || mm < 1 || mm > 12) return null;
+    return { dd, mm, yy };
+  }
+
+  /** Valeur d'une case du tableau → statut. null = case vide (à faire si concerné). */
+  function cellStatus(v, campStart) {
+    if (isBlank(v)) return null;
+    const d = toDate(v);
+    if (d) return { s: 'fait', at: d.toISOString(), by: 'import' };
+    const txt = String(v).replace(/ /g, ' ').trim(), n = norm(txt);
+    if (NON.has(n) || n === 'oui') return n === 'oui' ? null : { s: 'nc' };
+    const pd = parseTextDate(txt);
+    if (pd) {
+      let y = pd.yy;
+      if (y === null) { y = campStart.getFullYear(); if (pd.mm < campStart.getMonth() + 1 - 3) y++; }
+      return { s: 'fait', at: new Date(y, pd.mm - 1, pd.dd, 12).toISOString(), by: 'import', note: txt.slice(0, 40) };
+    }
+    return { s: 'nc', note: txt.slice(0, 40) };
+  }
+  const isNonCell = v => !isBlank(v) && !toDate(v) && NON.has(norm(v));
+
+  function mapForme(f) {
+    const n = norm(f).replace(/[.,]/g, '');
+    if (!n) return '';
+    if (/^sa$/.test(n)) return 'SA';
+    if (/^(sarl|sas|sasu|eurl|snc|selarl|selas|spfpl|hol|holding|scop|sar|sccv|scp|sca|scs|sel)/.test(n)) return 'SOC';
+    if (/^(bnc|mme|m|mr|monsieur|madame|irpp|lmnp|lmp|ei|eirl|indiv|dr|ba|bic|micro)/.test(n)) return 'EI';
+    if (/^(sci|sc|scm|asso|ass|association|fonds|gfa|gaec|earl|copro)/.test(n)) return 'AUTRE';
+    return '';
+  }
+  function mapCloture(v) {
+    const d = toDate(v);
+    if (d) return `${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    if (typeof v === 'number' && v >= 1 && v <= 12) return `${pad(v)}-${pad(new Date(2027, v, 0).getDate())}`;
+    const pd = !isBlank(v) && parseTextDate(String(v));
+    if (pd) return `${pad(pd.mm)}-${pad(pd.dd)}`;
+    return '';
+  }
+  const initials = v => { const s = String(v || '').replace(/ /g, '').trim(); return /^[A-Za-z]{1,5}$/.test(s) && !/^ca12$/i.test(s) && !/^data$/i.test(s) ? s.toUpperCase() : ''; };
+
+  /** Repère les colonnes du tableau de suivi à partir des 2 lignes d'en-tête. */
+  function describe(aoa) {
+    const h = aoa.findIndex(r => r && r.some(c => /collaborateur/.test(norm(c))));
+    if (h < 0) return null;
+    const head = aoa[h], groupsRow = aoa[h - 1] || [];
+    const width = Math.max(head.length, groupsRow.length);
+    const cols = []; let grp = '';
+    for (let j = 0; j < width; j++) {
+      if (!isBlank(groupsRow[j])) grp = norm(groupsRow[j]);
+      const lab = norm(head[j]), mmyy = (lab.match(/(\d{2})\/(\d{4})/) || []);
+      const at = mmyy[0] ? `${mmyy[2]}-${mmyy[1]}` : '';
+      let role = null;
+      if (j === 0 && !lab) role = { f: 'nom' };
+      else if (/^nom|client|raison|denomination/.test(lab)) role = { f: 'nom' };
+      else if (/collaborateur tva/.test(lab)) role = { f: 'collabTVA' };
+      else if (/collaborateur/.test(lab)) role = { f: 'collab' };
+      else if (/agility|n° dossier|numero|^code/.test(lab)) role = { f: 'num' };
+      else if (/siren|siret/.test(lab)) role = { f: 'siren' };
+      else if (/cloture/.test(lab)) role = { f: 'cloture' };
+      else if (/forme/.test(lab)) role = { f: 'forme' };
+      else if (/^is ?\/ ?ir/.test(lab)) role = { f: 'impot' };
+      else if (/^tva \d{2}\/\d{4}/.test(lab)) role = { slot: 'TVA@' + at };
+      else if (/tva mensuelle/.test(grp) && !lab) role = { f: 'tvaFlag' };
+      else if (/acompte is/.test(lab) && at) role = { slot: 'IS-AC@' + at };
+      else if (/2572|solde is/.test(lab)) role = { col: 'IS-SOLDE' };
+      else if (/2065|liasse is/.test(lab)) role = { col: 'IS-LIASSE' };
+      else if (/acompte cvae/.test(lab) && at) role = { slot: 'CVAE-AC@' + at };
+      else if (/1329|solde cvae/.test(lab)) role = { col: 'CVAE-SOLDE' };
+      else if (/^1330/.test(lab)) role = { col: 'CVAE-1330' };
+      else if (/das ?2/.test(grp)) role = { col: 'DAS2', autre: 'DAS2' };
+      else if (/^tvs/.test(grp)) role = { col: 'TVS', autre: 'TVS' };
+      else if (/2561/.test(grp)) role = { col: 'IFU', autre: 'IFU' };
+      else if (/^cfe/.test(grp) && /acompte/.test(lab)) role = { col: 'CFE-AC', autre: 'CFEAC' };
+      else if (/^cfe/.test(grp)) role = { col: 'CFE', autre: 'CFE' };
+      else if (/foncier/.test(grp)) role = { col: 'TF', autre: 'TF' };
+      else if (/tva annuelle/.test(grp) && /acompte/.test(lab) && at) role = { slot: 'CA12-AC@' + at, ca12: true };
+      else if (/tva annuelle/.test(grp) || /ca12/.test(lab)) role = { col: 'TVA-CA12', ca12: true };
+      if (role) cols.push({ j, ...role });
+    }
+    return { h, cols };
+  }
+
+  /** Transforme le tableau de suivi en dossiers (profil + statuts). Fonction pure. */
+  function fromSuivi(aoa, R, existing = new Map()) {
+    const desc = describe(aoa);
+    if (!desc) return { error: 'Ce fichier ne ressemble pas au tableau de suivi : aucune colonne « Collaborateur » trouvée.' };
+    const by = f => desc.cols.find(c => c.f === f);
+    const tvaCols = desc.cols.filter(c => c.slot && c.slot.startsWith('TVA@')).sort((a, b) => a.slot.localeCompare(b.slot));
+    const firstMonth = tvaCols.length ? tvaCols[0].slot.slice(4) : null;
+    const campY = firstMonth ? +firstMonth.slice(0, 4) : new Date().getFullYear();
+    const Rc = firstMonth ? { ...R, campagne: { mois: +firstMonth.slice(5) } } : R;
+    const camp = Engine.campaign(campY, Rc);
+    const out = new Map(), stats = { lignes: 0, ignorees: 0, nonPlacees: 0, collabs: new Set() };
+    for (const r of aoa.slice(desc.h + 1)) {
+      if (!r) continue;
+      const get = f => { const c = by(f); return c ? r[c.j] : null; };
+      const nom = String(get('nom') || '').replace(/ /g, ' ').trim();
+      if (!nom) { if (r.some(v => !isBlank(v))) stats.ignorees++; continue; }
+      stats.lignes++;
+      const numRaw = get('num'); const num = isBlank(numRaw) ? '' : String(numRaw).replace(/\.0$/, '').trim();
+      const sirenRaw = String(get('siren') || '').replace(/\D/g, ''); const siren = sirenRaw.length >= 9 ? sirenRaw.slice(0, 9) : '';
+      const collab = initials(get('collab')); const cTva = get('collabTVA');
+      const collabTVA = initials(cTva), tvaNote = !collabTVA && !isBlank(cTva) ? String(cTva).trim() : '';
+      if (collab) stats.collabs.add(collab); if (collabTVA) stats.collabs.add(collabTVA);
+      let id = num ? 'a' + num : siren ? 's' + siren : 'n' + norm(nom).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
+      if (out.has(id)) id += '-' + (collab || 'x').toLowerCase();
+      let k = 2; while (out.has(id)) id = id.replace(/~\d+$/, '') + '~' + k++;
+      // profil fiscal
+      const impotTxt = norm(get('impot'));
+      const impot = impotTxt.startsWith('is') ? 'IS' : impotTxt.startsWith('ir') ? 'IR' : '';
+      const formeLabel = String(get('forme') || '').trim();
+      const tvaVals = tvaCols.map(c => r[c.j]);
+      const ca12Cols = desc.cols.filter(c => c.ca12);
+      const flag = norm(get('tvaFlag'));
+      let tva;
+      const quarterly = tvaVals.length === 12 && tvaVals.every((v, i) => i % 3 === 0 || isNonCell(v)) && tvaVals.some((v, i) => i % 3 === 0 && !isNonCell(v));
+      if (flag.startsWith('oui') || (!flag && tvaVals.some(v => !isNonCell(v)) && !ca12Cols.some(c => !isNonCell(r[c.j]) && !isBlank(r[c.j])))) tva = quarterly ? 'trimestrielle' : 'mensuelle';
+      else if (ca12Cols.some(c => !isNonCell(r[c.j]))) tva = 'annuelle';
+      else tva = 'non';
+      const autres = new Set();
+      for (const c of desc.cols.filter(c => c.autre)) {
+        const v = r[c.j];
+        // Taxe foncière et acompte CFE sont ponctuels : une case vide ne crée pas d'échéance. Ailleurs, vide = à faire.
+        if (c.autre === 'TF' || c.autre === 'CFEAC' ? (!isBlank(v) && !isNonCell(v)) : !isNonCell(v)) autres.add(c.autre);
+      }
+      const cvae = desc.cols.filter(c => (c.slot || '').startsWith('CVAE') || (c.col || '').startsWith('CVAE'));
+      if (cvae.length && cvae.some(c => !isNonCell(r[c.j])) && cvae.some(c => !isBlank(r[c.j]) && !isNonCell(r[c.j]) || cvae.every(c2 => isBlank(r[c2.j])))) autres.add('CVAE');
+      const prev = existing.get(id) || {};
+      const d = {
+        ...prev, id, nom, num, siren: siren || prev.siren || '', collab, collabTVA, tvaNote,
+        forme: mapForme(formeLabel) || prev.forme || '', formeLabel, idf: prev.idf || false, jourTVA: prev.jourTVA || '',
+        tva, impot, cloture: mapCloture(get('cloture')) || prev.cloture || '', autres: [...autres],
+        statuts: JSON.parse(JSON.stringify(prev.statuts || {})),
+      };
+      if (!d.cloture && d.impot) d.cloture = '12-31';
+      // statuts : chaque case remplie va sur l'échéance correspondante du dossier
+      const refs = Engine.refsFor(d, camp, Rc);
+      for (const c of desc.cols) {
+        if (!c.slot && !c.col) continue;
+        const st = cellStatus(r[c.j], camp.start);
+        if (!st) continue;
+        let ref = c.slot ? refs[c.slot] : Object.entries(refs).find(([key, rf]) => rf.col === c.col);
+        if (Array.isArray(ref)) ref = ref[1];
+        if (!ref) { if (st.s === 'fait') stats.nonPlacees++; continue; }
+        const cm = Engine.cell(d, ref.col, ref.y, Rc, undefined, new Date());
+        if (st.s === 'nc' && !st.note && !cm.applicable) continue;           // « NON » sur une échéance déjà non concernée
+        const cur = Engine.stOf(d, ref.y, ref.col);
+        if (cur && cur.s === 'fait' && cur.by !== 'import' && st.s !== 'fait') continue;   // ne jamais effacer un « Fait » saisi dans l'appli
+        if (cm.due) st.due = Engine.ymd(cm.due);
+        (d.statuts[ref.y] = d.statuts[ref.y] || {})[ref.col] = st;
+      }
+      out.set(id, d);
+    }
+    return { dossiers: out, stats, campaign: camp, campagneMois: firstMonth ? +firstMonth.slice(5) : null };
+  }
+
+  /** Liste simple : nom + SIREN ou n° de dossier + collaborateur. */
+  function fromList(aoa) {
+    const hi = aoa.findIndex(r => r && r.some(c => /siren|siret|agility|dossier|numero/.test(norm(c))));
+    if (hi < 0) return { error: 'Aucune colonne « SIREN » ou « N° de dossier » trouvée dans la première feuille.' };
+    const head = aoa[hi].map(norm), find = keys => head.findIndex(h => keys.some(k => h.includes(k)));
+    const iS = find(['siren', 'siret']), iA = find(['agility', 'n° dossier', 'numero']), iN = find(['nom', 'client', 'raison', 'denomination', 'societe']), iC = find(['collab', 'responsable', 'gestionnaire']);
+    const out = new Map(); let skipped = 0;
+    for (const r of aoa.slice(hi + 1)) {
+      if (!r || r.every(isBlank)) continue;
+      let siren = iS >= 0 ? String(r[iS] ?? '').replace(/\D/g, '') : ''; if (siren.length === 14) siren = siren.slice(0, 9); if (siren.length !== 9) siren = '';
+      const num = iA >= 0 && !isBlank(r[iA]) ? String(r[iA]).trim() : '';
+      if (!siren && !num) { skipped++; continue; }
+      const id = num ? 'a' + num : 's' + siren;
+      out.set(id, { id, siren, num, nom: String(iN >= 0 ? r[iN] ?? '' : '').trim() || 'Dossier ' + (num || siren), collab: iC >= 0 ? initials(r[iC]) || String(r[iC] || '').trim() : '' });
+    }
+    return { list: out, skipped };
+  }
+  const isSuivi = aoa => aoa.slice(0, 4).some(r => r && r.some(c => /agility|collaborateur tva|tva \d{2}\/\d{4}/.test(norm(c))));
+  return { fromSuivi, fromList, isSuivi, cellStatus, mapForme, mapCloture };
+})();
+
+/* ==========================================================================
+   Stockage partagé (db de l'artefact) avec repli local. Dossiers répartis en 8 lots pour dépasser 1 000.
+   ========================================================================== */
+const COLLS = ['dossiers', 'collaborateurs', 'regles'];
+const SHARDS = 8;
+const shardOf = id => { let h = 0; for (const ch of id) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return h % SHARDS; };
 const Store = {
-  mode: 'loading', db: null, canWrite: true,
-  data: { dossiers: new Map(), collaborateurs: new Map(), regles: new Map(), statuts: new Map() },
-  loaded: new Set(),
+  mode: 'loading', db: null, canWrite: true, error: null,
+  data: { dossiers: new Map(), collaborateurs: new Map(), regles: new Map() }, loaded: new Set(),
   async init(onChange) {
     this.onChange = onChange;
     let db = null;
     try { db = window.claude && window.claude.use ? await window.claude.use('db') : null; } catch (e) { db = null; }
     if (db) {
       this.mode = 'shared'; this.db = db;
-      try {
-        const user = await window.claude.use('user');
-        if (user) { const w = await user.can('data.write'); if (w === false) this.canWrite = false; }
-      } catch (e) {}
-      for (const c of COLLS) {
-        db.collection(c).limit(1000).onSnapshot(snap => {
-          const m = new Map(); snap.docs.forEach(d => m.set(d.id, d.data()));
-          this.data[c] = m; this.loaded.add(c); this.onChange();
-        }, err => { this.error = err; this.onChange(); });
-      }
+      try { const u = await window.claude.use('user'); if (u && (await u.can('data.write')) === false) this.canWrite = false; } catch (e) {}
+      const parts = Array.from({ length: SHARDS }, () => new Map()); let got = 0;
+      parts.forEach((_, k) => db.collection('dossiers').where('shard', '==', k).limit(1000).onSnapshot(snap => {
+        const m = new Map(); snap.docs.forEach(d => m.set(d.id, d.data())); parts[k] = m;
+        if (!parts[k].seen) { parts[k].seen = true; got++; }
+        const all = new Map(); parts.forEach(p => p.forEach((v, key) => all.set(key, v)));
+        this.data.dossiers = all; if (got >= SHARDS) this.loaded.add('dossiers'); this.schedule();
+      }, err => { this.error = err; this.schedule(); }));
+      for (const c of ['collaborateurs', 'regles']) db.collection(c).limit(1000).onSnapshot(snap => {
+        const m = new Map(); snap.docs.forEach(d => m.set(d.id, d.data())); this.data[c] = m; this.loaded.add(c); this.schedule();
+      }, err => { this.error = err; this.schedule(); });
     } else {
       this.mode = 'local';
-      try {
-        const raw = JSON.parse(localStorage.getItem('echeancier.local') || '{}');
-        for (const c of COLLS) this.data[c] = new Map(Object.entries(raw[c] || {}));
-      } catch (e) {}
-      COLLS.forEach(c => this.loaded.add(c));
-      this.onChange();
+      try { const raw = JSON.parse(localStorage.getItem('echeancier.v2') || '{}'); for (const c of COLLS) this.data[c] = new Map(Object.entries(raw[c] || {})); } catch (e) {}
+      COLLS.forEach(c => this.loaded.add(c)); this.onChange();
     }
   },
-  persistLocal() {
+  schedule() { clearTimeout(this.t); this.t = setTimeout(() => this.onChange(), 60); },
+  persist() {
     const o = {}; for (const c of COLLS) o[c] = Object.fromEntries(this.data[c]);
-    try { localStorage.setItem('echeancier.local', JSON.stringify(o)); } catch (e) {}
-    this.onChange();
+    try { localStorage.setItem('echeancier.v2', JSON.stringify(o)); } catch (e) {}
+    this.schedule();
   },
+  withShard(c, id, body) { return c === 'dossiers' ? { ...body, shard: shardOf(id) } : body; },
   async set(c, id, body) {
+    body = this.withShard(c, id, body); delete body.id;
     if (this.mode === 'shared') return this.db.collection(c).doc(id).set(body);
-    this.data[c] = new Map(this.data[c]).set(id, JSON.parse(JSON.stringify(body))); this.persistLocal();
+    this.data[c] = new Map(this.data[c]).set(id, JSON.parse(JSON.stringify(body))); this.persist();
   },
-  // Fusion profonde (seuls les champs fournis changent) ; crée le document s'il manque.
   async merge(c, id, patch, base = {}) {
     if (this.mode === 'shared') {
       const ref = this.db.collection(c).doc(id);
-      if (this.data[c].has(id)) {
-        try { return await ref.update(patch); } catch (e) { if (e.code !== 'invalid_argument') throw e; }
-      }
-      return ref.set(deepMerge(deepMerge({}, base), patch));
+      if (this.data[c].has(id)) { try { return await ref.update(patch); } catch (e) { if (e.code !== 'invalid_argument') throw e; } }
+      return ref.set(this.withShard(c, id, deepMerge(deepMerge({}, base), patch)));
     }
-    const cur = this.data[c].get(id) || base;
-    this.data[c] = new Map(this.data[c]).set(id, deepMerge(JSON.parse(JSON.stringify(cur)), patch)); this.persistLocal();
+    const cur = JSON.parse(JSON.stringify(this.data[c].get(id) || this.withShard(c, id, base)));
+    this.data[c] = new Map(this.data[c]).set(id, deepMerge(cur, patch)); this.persist();
   },
   async del(c, id) {
     if (this.mode === 'shared') return this.db.collection(c).doc(id).delete();
-    const m = new Map(this.data[c]); m.delete(id); this.data[c] = m; this.persistLocal();
+    const m = new Map(this.data[c]); m.delete(id); this.data[c] = m; this.persist();
   },
 };
 function deepMerge(a, b) {
@@ -556,58 +788,60 @@ function deepMerge(a, b) {
    ========================================================================== */
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const fmt = dt => dt ? `${String(dt.getDate()).padStart(2, '0')}/${String(dt.getMonth() + 1).padStart(2, '0')}/${dt.getFullYear()}` : '';
-const fmtShort = dt => dt ? `${String(dt.getDate()).padStart(2, '0')}/${String(dt.getMonth() + 1).padStart(2, '0')}` : '';
+const fmt = dt => dt ? `${pad(dt.getDate())}/${pad(dt.getMonth() + 1)}/${dt.getFullYear()}` : '';
+const fmtShort = dt => dt ? `${pad(dt.getDate())}/${pad(dt.getMonth() + 1)}` : '';
 const lsGet = (k, d) => { try { const v = localStorage.getItem(k); return v === null ? d : v; } catch (e) { return d; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
 
 const TODAY = new Date();
-const UI = {
-  tab: lsGet('echeancier.tab', 'grid'),
-  year: Number(lsGet('echeancier.year', TODAY.getFullYear())),
-  me: lsGet('echeancier.me', ''),
-  f: { collab: '', month: '', type: '', q: '', late: false },
-};
+const PAGE = 150;
+const UI = { tab: lsGet('echeancier.tab', 'grid'), year: null, me: lsGet('echeancier.me', ''), f: { collab: '', month: '', type: '', q: '', late: false }, shown: PAGE, dq: '', dshown: PAGE };
 
 const R = () => Engine.rules(Object.fromEntries(Store.data.regles));
-const dossiers = () => [...Store.data.dossiers.values()].sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
-const collabs = () => [...Store.data.collaborateurs.entries()].map(([id, c]) => ({ id, ...c })).sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
-const collabName = id => (Store.data.collaborateurs.get(id) || {}).nom || '';
-const stKey = (siren, y) => `${siren}_${y}`;
-const stored = (siren, y, col) => { const s = Store.data.statuts.get(stKey(siren, y)); return s && s.cells ? s.cells[col] || undefined : undefined; };
+const dossiers = () => [...Store.data.dossiers.entries()].map(([id, d]) => ({ ...d, id })).sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
+const getD = id => { const d = Store.data.dossiers.get(id); return d ? { ...d, id } : null; };
+const collabs = () => [...Store.data.collaborateurs.entries()].map(([id, c]) => ({ id, ...c })).sort((a, b) => (a.code || a.nom).localeCompare(b.code || b.nom, 'fr'));
+const collabName = id => { if (!id) return ''; const c = Store.data.collaborateurs.get('c-' + String(id).toLowerCase()) || Store.data.collaborateurs.get(id); return c ? c.nom : id; };
+const collabId = code => 'c-' + String(code).toLowerCase();
+const resp = (d, colId) => colId.startsWith('TVA') && d.collabTVA ? d.collabTVA : d.collab;   // code du responsable de l'échéance
+const stored = (d, y, col) => Engine.stOf(d, y, col);
+let VIEW = null;
 
-/** Vue courante du tableau : lignes, colonnes et cases, après filtres. Partagée par l'écran et l'export. */
+/** Vue du tableau de campagne : lignes, colonnes, cases. Partagée par l'écran et l'export. */
 function computeView() {
-  const y = UI.year, rules = R(), f = UI.f;
+  const rules = R(), camp = Engine.campaign(UI.year, rules), f = UI.f;
   let rows = dossiers();
-  if (f.collab) rows = rows.filter(d => d.collab === f.collab);
-  if (f.q) { const q = f.q.toLowerCase(); rows = rows.filter(d => d.nom.toLowerCase().includes(q) || d.siren.includes(q.replace(/\s/g, ''))); }
-  const cells = new Map();
-  for (const d of rows) for (const c of Engine.COLS) cells.set(d.siren + '|' + c.id, Engine.cell(d, c.id, y, rules, stored(d.siren, y, c.id), TODAY));
-  const match = cm => {
-    if (f.month && !(cm.due && Engine.ymd(cm.due).slice(0, 7) === f.month)) return false;
-    if (f.late && !cm.late) return false;
-    return true;
-  };
-  let cols = Engine.COLS.filter(c => !f.type || c.type === f.type);
-  // On masque les colonnes où aucun dossier affiché n'est concerné ; avec un filtre, celles sans case correspondante.
-  cols = cols.filter(c => rows.some(d => { const cm = cells.get(d.siren + '|' + c.id); return cm.status !== 'nc' || cm.manual; }));
-  if (f.month || f.late) {
-    cols = cols.filter(c => rows.some(d => match(cells.get(d.siren + '|' + c.id))));
-    rows = rows.filter(d => cols.some(c => match(cells.get(d.siren + '|' + c.id))));
+  if (f.collab) rows = rows.filter(d => d.collab === f.collab || d.collabTVA === f.collab);
+  if (f.q) { const q = f.q.toLowerCase(); rows = rows.filter(d => d.nom.toLowerCase().includes(q) || String(d.num || '').includes(q) || String(d.siren || '').includes(q)); }
+  const cells = new Map(), keys = new Set();
+  for (const d of rows) {
+    const refs = Engine.refsFor(d, camp, rules);
+    for (const [key, ref] of Object.entries(refs)) {
+      const cm = Engine.cell(d, ref.col, ref.y, rules, stored(d, ref.y, ref.col), TODAY);
+      cm.ref = ref;
+      cells.set(d.id + '|' + key, cm);
+      if (cm.status !== 'nc' || cm.manual) keys.add(key);
+    }
   }
-  return { y, rows, cols, cells, match, active: !!(f.month || f.late) };
+  const match = cm => cm && !(f.month && !(cm.due && Engine.ym(cm.due) === f.month)) && !(f.late && !cm.late);
+  let cols = [...keys].filter(k => !f.type || Engine.keyLabel(k).type === f.type).sort(Engine.keyOrder).map(key => ({ key, ...Engine.keyLabel(key) }));
+  if (f.month || f.late) {
+    cols = cols.filter(c => rows.some(d => match(cells.get(d.id + '|' + c.key))));
+    rows = rows.filter(d => cols.some(c => match(cells.get(d.id + '|' + c.key))));
+  }
+  return (VIEW = { camp, rows, cols, cells, match, active: !!(f.month || f.late) });
 }
+const NCELL = { status: 'nc', note: '', due: null };
 
 /* ==========================================================================
    Rendu
    ========================================================================== */
 function render() {
   if (Store.mode === 'loading') return;
+  if (UI.year === null) UI.year = Number(lsGet('echeancier.campagne', '')) || Engine.currentCampaignYear(TODAY, R());
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === UI.tab));
   for (const v of ['grid', 'week', 'dossiers', 'cal']) $('#v-' + v).hidden = v !== UI.tab;
-  renderHeader();
-  renderBanner();
+  renderHeader(); renderBanner();
   if (UI.tab === 'grid') renderGrid();
   if (UI.tab === 'week') renderWeek();
   if (UI.tab === 'dossiers') renderDossiers();
@@ -616,11 +850,9 @@ function render() {
 }
 
 function renderHeader() {
-  const y0 = TODAY.getFullYear();
-  const years = [y0 - 1, y0, y0 + 1];
-  $('#year').innerHTML = years.map(y => `<option value="${y}" ${y === UI.year ? 'selected' : ''}>${y}</option>`).join('');
-  const cs = collabs();
-  $('#me').innerHTML = `<option value="">Choisir…</option>` + cs.map(c => `<option value="${c.id}" ${c.id === UI.me ? 'selected' : ''}>${esc(c.nom)}</option>`).join('');
+  const y0 = Engine.currentCampaignYear(TODAY, R()), rules = R();
+  $('#year').innerHTML = [y0 - 1, y0, y0 + 1].map(y => `<option value="${y}" ${y === UI.year ? 'selected' : ''}>${Engine.campaign(y, rules).label}</option>`).join('');
+  $('#me').innerHTML = `<option value="">Choisir…</option>` + collabs().map(c => `<option value="${esc(c.code || c.id)}" ${(c.code || c.id) === UI.me ? 'selected' : ''}>${esc(c.nom)}${c.code && c.nom !== c.code ? ' (' + esc(c.code) + ')' : ''}</option>`).join('');
 }
 
 function renderBanner() {
@@ -628,150 +860,122 @@ function renderBanner() {
   if (Store.mode === 'local') html += `<div class="banner warn">Mode local : les données restent dans ce navigateur. Ouvrez l'appli depuis son lien claude.ai pour travailler à plusieurs.</div>`;
   if (!Store.canWrite) html += `<div class="banner">Lecture seule : votre accès ne permet pas de modifier les statuts.</div>`;
   if (Store.error) html += `<div class="banner warn">La synchronisation est interrompue (${esc(Store.error.code)}). Rechargez la page.</div>`;
-  if (Store.mode === 'shared' && Store.loaded.size === COLLS.length && !Store.data.dossiers.size)
-    html += `<div class="banner">Aucun dossier pour l'instant. Ajoutez-en un ou importez votre fichier Excel depuis l'onglet <b>Dossiers</b>.</div>`;
+  if (Store.mode === 'shared' && !Store.loaded.has('dossiers')) html += `<div class="banner">Chargement des dossiers…</div>`;
+  else if (!Store.data.dossiers.size) html += `<div class="banner">Aucun dossier pour l'instant. Importez votre tableau de suivi depuis l'onglet <b>Dossiers</b>.</div>`;
   $('#banner').innerHTML = html;
 }
 
 function renderGrid() {
-  const cs = collabs();
   const f = UI.f;
-  $('#f-collab').innerHTML = `<option value="">Tous</option>` + cs.map(c => `<option value="${c.id}" ${c.id === f.collab ? 'selected' : ''}>${esc(c.nom)}</option>`).join('');
+  $('#f-collab').innerHTML = `<option value="">Tous</option>` + collabs().map(c => `<option value="${esc(c.code || c.id)}" ${(c.code || c.id) === f.collab ? 'selected' : ''}>${esc(c.nom)}</option>`).join('');
   $('#f-type').innerHTML = `<option value="">Toutes</option>` + TYPES.map(t => `<option value="${t.id}" ${t.id === f.type ? 'selected' : ''}>${t.label}</option>`).join('');
-  // mois proposés : ceux où tombe au moins une échéance de la période
   const v = computeView();
-  const months = new Set();
-  for (const cm of v.cells.values()) if (cm.due && cm.status !== 'nc') months.add(Engine.ymd(cm.due).slice(0, 7));
+  const months = new Set(); for (const cm of v.cells.values()) if (cm.due && cm.status !== 'nc') months.add(Engine.ym(cm.due));
   if (f.month) months.add(f.month);
-  $('#f-month').innerHTML = `<option value="">Tous</option>` + [...months].sort().map(m => {
-    const [yy, mm] = m.split('-').map(Number);
-    return `<option value="${m}" ${m === f.month ? 'selected' : ''}>${MONTHS_LONG[mm - 1]} ${yy}</option>`;
-  }).join('');
+  $('#f-month').innerHTML = `<option value="">Tous</option>` + [...months].sort().map(m => { const [yy, mm] = m.split('-').map(Number); return `<option value="${m}" ${m === f.month ? 'selected' : ''}>${MONTHS_LONG[mm - 1]} ${yy}</option>`; }).join('');
   $('#f-q').value = f.q; $('#f-late').checked = f.late;
 
-  // résumé sur l'ensemble des dossiers affichés (avant filtres mois / retard)
   let late = 0, soon = 0, done = 0, todo = 0;
-  const all = computeViewNoFilter();
-  for (const cm of all.values()) {
-    if (cm.status === 'fait') done++;
-    else if (cm.status === 'afaire') { todo++; if (cm.late) late++; else if (cm.soon) soon++; }
+  for (const cm of v.cells.values()) {
+    if (v.active && !v.match(cm)) continue;
+    if (cm.status === 'fait') done++; else if (cm.status === 'afaire') { todo++; if (cm.late) late++; else if (cm.soon) soon++; }
   }
-  $('#summary').innerHTML = `
-    <span class="pill late"><b>${late}</b> en retard</span>
-    <span class="pill soon"><b>${soon}</b> dans les 7 jours</span>
-    <span class="pill"><b>${todo}</b> à faire</span>
-    <span class="pill done"><b>${done}</b> faites</span>`;
+  $('#summary').innerHTML = `<span class="pill late"><b>${late}</b> en retard</span><span class="pill soon"><b>${soon}</b> dans les 7 jours</span>
+    <span class="pill"><b>${todo}</b> à faire</span><span class="pill done"><b>${done}</b> faites</span><span class="pill"><b>${v.rows.length}</b> dossiers</span>`;
+  if (!v.rows.length) { $('#grid-wrap').innerHTML = `<div class="empty">${Store.data.dossiers.size ? 'Aucune échéance ne correspond à ces filtres.' : "Aucun dossier. Importez votre tableau dans l'onglet Dossiers."}</div>`; return; }
 
-  if (!v.rows.length) {
-    $('#grid-wrap').innerHTML = `<div class="empty">${Store.data.dossiers.size ? 'Aucune échéance ne correspond à ces filtres.' : "Aucun dossier. Ajoutez-en un dans l'onglet Dossiers."}</div>`;
-    return;
-  }
-  // en-têtes groupés
   const groups = [];
   for (const c of v.cols) { const g = groups[groups.length - 1]; if (g && g.name === c.grp) g.n++; else groups.push({ name: c.grp, n: 1 }); }
-  let h = `<table class="grid" id="grid"><thead><tr class="g"><th class="dossier" rowspan="2" style="vertical-align:bottom;padding:6px 10px">Dossier · période ${v.y}</th>`;
+  let h = `<table class="grid" id="grid"><thead><tr class="g"><th class="dossier" rowspan="2" style="vertical-align:bottom;padding:6px 10px">Dossier</th>`;
   h += groups.map(g => `<th colspan="${g.n}">${esc(g.name)}</th>`).join('') + `</tr><tr class="c">`;
-  h += v.cols.map(c => `<th>${esc(c.label)}</th>`).join('') + `</tr></thead><tbody>`;
-  for (const d of v.rows) {
+  h += v.cols.map(c => c.slot === 'TVA' ? `<th>${esc(c.label)}</th>` : `<th>${esc(c.label)}<small>${esc(c.month)}</small></th>`).join('') + `</tr></thead><tbody>`;
+  for (const d of v.rows.slice(0, UI.shown)) {
     const incomplete = !Engine.profileComplete(d);
     h += `<tr><td class="dossier"><span class="n" title="${esc(d.nom)}">${esc(d.nom)}</span>
-      <span class="s"><span class="mono">${esc(d.siren)}</span>${d.collab ? `<span class="tag">${esc(collabName(d.collab))}</span>` : ''}
-      ${incomplete ? `<button class="tag warn" data-act="edit" data-siren="${d.siren}" style="border:0;cursor:pointer">Profil à compléter</button>` : ''}</span></td>`;
+      <span class="s"><span class="mono">${esc(d.num || d.siren || '')}</span>${d.collab ? `<span class="tag">${esc(collabName(d.collab))}</span>` : ''}${d.collabTVA ? `<span class="tag" title="Collaborateur TVA">TVA ${esc(collabName(d.collabTVA))}</span>` : ''}
+      ${incomplete ? `<button class="tag warn" data-act="edit" data-id="${esc(d.id)}" style="border:0;cursor:pointer">Profil à compléter</button>` : ''}</span></td>`;
     for (const c of v.cols) {
-      const cm = v.cells.get(d.siren + '|' + c.id);
+      const cm = v.cells.get(d.id + '|' + c.key) || NCELL;
       const lbl = Engine.statusLabel(cm);
       const cls = ['cell', cm.status, cm.late ? 'late' : '', cm.soon ? 'soon' : '', cm.manual ? 'manual' : '', v.active && !v.match(cm) ? 'dim' : ''].join(' ');
-      const title = `${d.nom} · ${c.grp} ${c.label} · ${lbl}${cm.due ? ' · échéance ' + fmt(cm.due) : ''}${cm.status === 'fait' ? ` · fait le ${fmt(new Date(cm.at))}${cm.by ? ' par ' + collabName(cm.by) : ''}` : ''}`;
-      const short = cm.status === 'fait' ? '✓ Fait' : cm.status === 'nc' ? '—' : cm.late ? 'Retard' : 'À faire';
-      h += `<td><button class="${cls}" data-act="cell" data-siren="${d.siren}" data-col="${c.id}" data-status="${esc(lbl)}" title="${esc(title)}" aria-label="${esc(title)}">
-        ${cm.due && cm.status !== 'nc' ? `<span>${fmtShort(cm.due)}</span>` : ''}<span class="st">${short}</span></button></td>`;
+      const title = `${d.nom} · ${c.grp} ${c.label} ${c.month} · ${lbl}${cm.due ? ' · échéance ' + fmt(cm.due) : ''}${cm.status === 'fait' && cm.at ? ` · fait le ${fmt(new Date(cm.at))}${cm.by && cm.by !== 'import' ? ' par ' + collabName(cm.by) : ''}` : ''}`;
+      const short = cm.status === 'fait' ? '✓ Fait' : cm.status === 'nc' ? (cm.note ? '' : '—') : cm.late ? 'Retard' : 'À faire';
+      h += `<td><button class="${cls}" data-act="cell" data-id="${esc(d.id)}" data-key="${c.key}" data-status="${esc(lbl)}" title="${esc(title)}" aria-label="${esc(title)}">
+        ${cm.due && cm.status !== 'nc' ? `<span>${fmtShort(cm.due)}</span>` : ''}${short ? `<span class="st">${short}</span>` : ''}${cm.note ? `<span class="note">${esc(cm.note)}</span>` : ''}</button></td>`;
     }
     h += `</tr>`;
   }
   h += `</tbody></table>`;
+  if (v.rows.length > UI.shown) h += `<div class="more-rows"><span class="lead" style="margin:0">${UI.shown} dossiers affichés sur ${v.rows.length}</span><button class="btn" data-act="more">Afficher ${Math.min(PAGE, v.rows.length - UI.shown)} de plus</button><button class="btn ghost" data-act="all">Tout afficher</button></div>`;
   const wrap = $('#grid-wrap'), sx = wrap.scrollLeft, sy = wrap.scrollTop;
   wrap.innerHTML = h; wrap.scrollLeft = sx; wrap.scrollTop = sy;
 }
-function computeViewNoFilter() {
-  const keep = UI.f; UI.f = { ...keep, month: '', late: false };
-  const v = computeView(); UI.f = keep;
-  const m = new Map();
-  for (const d of v.rows) for (const c of v.cols) m.set(d.siren + '|' + c.id, v.cells.get(d.siren + '|' + c.id));
-  return m;
-}
 
-/** Échéances à venir d'un collaborateur, sur les périodes qui peuvent tomber dans les prochains jours. */
-function upcoming(collabId, days) {
-  const rules = R(), out = [];
-  const y0 = TODAY.getFullYear();
+/** Échéances d'un collaborateur : celles dont il est responsable (collaborateur TVA pour la TVA). */
+function upcoming(code, days) {
+  const rules = R(), out = [], y0 = TODAY.getFullYear();
+  const from = Engine.campaign(Engine.currentCampaignYear(TODAY, rules), rules).start;   // le suivi commence avec la campagne en cours
   for (const d of dossiers()) {
-    if (collabId && d.collab !== collabId) continue;
-    for (const y of [y0 - 1, y0]) for (const c of Engine.COLS) {
-      const cm = Engine.cell(d, c.id, y, rules, stored(d.siren, y, c.id), TODAY);
-      if (!cm.due || cm.status === 'nc') continue;
+    if (d.collab !== code && d.collabTVA !== code) continue;
+    for (const y of [y0 - 1, y0, y0 + 1]) for (const c of Engine.COLS) {
+      if (resp(d, c.id) !== code) continue;
+      const cm = Engine.cell(d, c.id, y, rules, stored(d, y, c.id), TODAY);
+      if (!cm.due || cm.status === 'nc' || cm.due < from) continue;
       const dd = Math.round((Engine.startOfDay(cm.due) - Engine.startOfDay(TODAY)) / 864e5);
-      if (cm.status === 'afaire' && dd >= 0 && dd <= days) out.push({ d, c, y, cm, dd });
-      else if (cm.status === 'fait' && dd >= 0 && dd <= days) out.push({ d, c, y, cm, dd });
+      if (dd >= 0 && dd <= days) out.push({ d, c, y, cm, dd });
       else if (cm.status === 'afaire' && dd < 0) out.push({ d, c, y, cm, dd, late: true });
     }
   }
   return out.sort((a, b) => a.cm.due - b.cm.due);
 }
-
 function renderWeekCount() {
   const el = $('#week-count');
   if (!UI.me) { el.hidden = true; return; }
   const n = upcoming(UI.me, 7).filter(x => !x.late && x.cm.status === 'afaire').length;
   el.hidden = !n; el.textContent = n;
 }
-
 function renderWeek() {
   const sec = $('#v-week');
-  if (!UI.me) {
-    sec.innerHTML = `<h2 class="h2">Ma semaine</h2><p class="lead">Choisissez votre nom dans « Je suis », en haut de l'écran, pour voir vos échéances des 7 prochains jours.</p>`;
-    return;
-  }
-  const all = upcoming(UI.me, 7);
-  const list = all.filter(x => !x.late);
-  const lateN = all.filter(x => x.late).length;
+  if (!UI.me) { sec.innerHTML = `<h2 class="h2">Ma semaine</h2><p class="lead">Choisissez vos initiales dans « Je suis », en haut de l'écran, pour voir vos échéances des 7 prochains jours.</p>`; return; }
+  const all = upcoming(UI.me, 7), list = all.filter(x => !x.late), lateN = all.filter(x => x.late).length;
   const end = new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate() + 7);
-  let h = `<h2 class="h2">Ma semaine</h2><p class="lead">${esc(collabName(UI.me))} · du ${fmt(TODAY)} au ${fmt(end)} · ${list.filter(x => x.cm.status === 'afaire').length} à faire.</p>`;
+  let h = `<h2 class="h2">Ma semaine</h2><p class="lead">${esc(collabName(UI.me))} · du ${fmt(TODAY)} au ${fmt(end)} · ${list.filter(x => x.cm.status === 'afaire').length} à faire. La TVA vous est attribuée quand vous êtes le collaborateur TVA du dossier.</p>`;
   if (lateN) h += `<div class="banner warn" style="max-width:760px">${lateN} échéance${lateN > 1 ? 's' : ''} en retard sur vos dossiers. <button class="btn" data-act="see-late" style="margin-left:8px">Voir dans le tableau</button></div>`;
   if (!list.length) h += `<p class="empty" style="max-width:760px">Rien à déposer sur vos dossiers dans les 7 prochains jours.</p>`;
-  let lastDay = '';
-  h += `<div class="week">`;
+  let lastDay = ''; h += `<div class="week">`;
   for (const x of list) {
     const day = Engine.ymd(x.cm.due);
-    if (day !== lastDay) {
-      lastDay = day;
-      const label = x.dd === 0 ? "Aujourd'hui" : x.dd === 1 ? 'Demain' : x.cm.due.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
-      h += `<div class="wk-day">${label}</div>`;
-    }
+    if (day !== lastDay) { lastDay = day; h += `<div class="wk-day">${x.dd === 0 ? "Aujourd'hui" : x.dd === 1 ? 'Demain' : x.cm.due.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</div>`; }
     const done = x.cm.status === 'fait';
     h += `<div class="wk ${done ? 'done' : ''}"><span class="d">${fmt(x.cm.due)}</span>
-      <span class="t"><b>${esc(x.d.nom)}</b><span>${esc(x.c.grp)} · ${esc(x.c.label)} · période ${x.y}${done ? ` · fait par ${esc(collabName(x.cm.by))}` : ''}</span></span>
-      ${done ? `<button class="btn" data-act="set" data-siren="${x.d.siren}" data-col="${x.c.id}" data-y="${x.y}" data-v="">Annuler</button>`
-             : `<button class="btn primary" data-act="set" data-siren="${x.d.siren}" data-col="${x.c.id}" data-y="${x.y}" data-v="fait" ${Store.canWrite ? '' : 'disabled'}>Marquer fait</button>`}</div>`;
+      <span class="t"><b>${esc(x.d.nom)}</b><span>${esc(x.c.label)} · période ${x.y}${done ? ' · fait' : ''}</span></span>
+      ${done ? `<button class="btn" data-act="set" data-id="${esc(x.d.id)}" data-col="${x.c.id}" data-y="${x.y}" data-v="">Annuler</button>`
+             : `<button class="btn primary" data-act="set" data-id="${esc(x.d.id)}" data-col="${x.c.id}" data-y="${x.y}" data-v="fait" ${Store.canWrite ? '' : 'disabled'}>Marquer fait</button>`}</div>`;
   }
   sec.innerHTML = h + `</div>`;
 }
 
 function renderDossiers() {
-  const ds = dossiers();
+  const q = UI.dq.toLowerCase();
+  const ds = dossiers().filter(d => !q || d.nom.toLowerCase().includes(q) || String(d.num || '').includes(q) || String(d.collab || '').toLowerCase() === q);
   const lbl = (list, id) => (list.find(x => x.id === id) || {}).label || '—';
-  $('#dossier-list').innerHTML = ds.length ? `<table class="list"><thead><tr><th>Client</th><th>SIREN</th><th>Collaborateur</th><th>TVA</th><th>Jour TVA</th><th>Impôt</th><th>Clôture</th><th>Autres</th><th></th></tr></thead><tbody>
-    ${ds.map(d => `<tr><td><b>${esc(d.nom)}</b>${Engine.profileComplete(d) ? '' : ' <span class="tag warn">Profil à compléter</span>'}</td>
-      <td class="mono">${esc(d.siren)}</td><td>${esc(collabName(d.collab)) || '—'}</td>
-      <td>${lbl(TVA_REGIMES, d.tva)}</td><td class="mono" title="${esc(Engine.tvaDay(d, R()).why)}">${['mensuelle', 'trimestrielle'].includes(d.tva) ? 'le ' + Engine.tvaDay(d, R()).jour + (d.jourTVA ? ' (forcé)' : '') : '—'}</td><td>${d.impot || '—'}</td>
-      <td class="mono">${d.cloture ? d.cloture.split('-').reverse().join('/') : '—'}</td>
+  const rules = R();
+  $('#d-q').value = UI.dq;
+  $('#dossier-list').innerHTML = ds.length ? `<table class="list"><thead><tr><th>Dossier</th><th>N°</th><th>Collab.</th><th>Collab. TVA</th><th>TVA</th><th>Jour TVA</th><th>Impôt</th><th>Clôture</th><th>Forme</th><th>Autres</th><th></th></tr></thead><tbody>
+    ${ds.slice(0, UI.dshown).map(d => `<tr><td><b>${esc(d.nom)}</b>${Engine.profileComplete(d) ? '' : ' <span class="tag warn">Profil à compléter</span>'}</td>
+      <td class="mono">${esc(d.num || d.siren || '')}</td><td>${esc(d.collab || '—')}</td><td>${esc(d.collabTVA || d.tvaNote || '—')}</td>
+      <td>${lbl(TVA_REGIMES, d.tva)}</td><td class="mono" title="${esc(Engine.tvaDay(d, rules).why)}">${['mensuelle', 'trimestrielle'].includes(d.tva) ? 'le ' + Engine.tvaDay(d, rules).jour + (d.jourTVA ? ' (forcé)' : '') : '—'}</td>
+      <td>${d.impot || '—'}</td><td class="mono">${d.cloture ? d.cloture.split('-').reverse().join('/') : '—'}</td><td>${esc(d.formeLabel || lbl(FORMES, d.forme))}</td>
       <td>${(d.autres || []).map(a => lbl(AUTRES, a)).join(', ') || '—'}</td>
-      <td><button class="btn" data-act="edit" data-siren="${d.siren}">Modifier</button></td></tr>`).join('')}
-    </tbody></table>` : `<div class="empty">Aucun dossier. Créez-en un ou importez votre fichier Excel.</div>`;
+      <td><button class="btn" data-act="edit" data-id="${esc(d.id)}">Modifier</button></td></tr>`).join('')}
+    </tbody></table>${ds.length > UI.dshown ? `<div class="more-rows"><span class="lead" style="margin:0">${UI.dshown} sur ${ds.length}</span><button class="btn" data-act="dmore">Afficher plus</button></div>` : ''}`
+    : `<div class="empty">Aucun dossier. Importez votre tableau de suivi.</div>`;
+  const counts = {}; dossiers().forEach(d => { counts[d.collab] = (counts[d.collab] || 0) + 1; if (d.collabTVA && d.collabTVA !== d.collab) counts[d.collabTVA] = (counts[d.collabTVA] || 0) + 1; });
   $('#collab-list').innerHTML = collabs().map(c => {
-    const n = ds.filter(d => d.collab === c.id).length;
-    return `<div class="collab-row"><input type="text" value="${esc(c.nom)}" data-collab="${c.id}" aria-label="Nom du collaborateur">
+    const n = counts[c.code || c.id] || 0;
+    return `<div class="collab-row"><span class="tag mono" style="min-width:40px;text-align:center">${esc(c.code || '')}</span><input type="text" value="${esc(c.nom)}" data-collab="${esc(c.id)}" aria-label="Nom du collaborateur ${esc(c.code || '')}">
       <span class="tag" title="Dossiers suivis">${n}</span>
-      <button class="btn ghost danger" data-act="collab-del" data-id="${c.id}" ${n ? 'disabled title="Réaffectez d\'abord ses dossiers"' : ''}>Retirer</button></div>`;
+      <button class="btn ghost danger" data-act="collab-del" data-id="${esc(c.id)}" ${n ? 'disabled title="Réaffectez d\'abord ses dossiers"' : ''}>Retirer</button></div>`;
   }).join('') || `<p class="lead">Aucun collaborateur.</p>`;
 }
 
@@ -780,8 +984,7 @@ function renderCal() {
   $('#rules').innerHTML = RULES.map(r => `<form class="card rule" data-rule="${r.id}">
     <h3>${esc(r.label)}</h3><p class="ex">${esc(r.ex)}</p>
     ${r.fields.map(f => {
-      const v = cur[r.id][f.k];
-      const id = `r-${r.id}-${f.k}`;
+      const v = cur[r.id][f.k], id = `r-${r.id}-${f.k}`;
       let input;
       if (f.type === 'md') input = `<input type="text" id="${id}" name="${f.k}" class="mono" value="${v.split('-').reverse().join('/')}" pattern="\\d{1,2}/\\d{1,2}" placeholder="JJ/MM" required>`;
       else if (f.type === 'list') input = `<input type="text" id="${id}" name="${f.k}" class="mono" value="${esc(v)}" pattern="[0-9, ]+" required>`;
@@ -796,195 +999,204 @@ function renderCal() {
 /* ==========================================================================
    Actions
    ========================================================================== */
-function toast(msg) {
-  const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; t.setAttribute('role', 'status');
-  document.body.appendChild(t); setTimeout(() => t.remove(), 2800);
-}
+function toast(msg) { const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; t.setAttribute('role', 'status'); document.body.appendChild(t); setTimeout(() => t.remove(), 3000); }
 async function guarded(fn) {
-  try { await fn(); }
+  try { await fn(); return true; }
   catch (e) {
     if (e && e.code === 'quota_exceeded') toast("La base est pleine : supprimez d'anciens dossiers pour continuer.");
     else if (e && e.code === 'invalid_argument') { Store.canWrite = false; toast("Modification refusée : votre accès est en lecture seule."); render(); }
     else toast("L'enregistrement a échoué. Réessayez dans un instant.");
+    return false;
   }
 }
 
-async function setStatus(siren, col, y, value) {
+async function setStatus(id, col, y, value) {
   if (!Store.canWrite) return;
-  if (value === 'fait' && !UI.me) { askWho(() => setStatus(siren, col, y, value)); return; }
-  const d = Store.data.dossiers.get(siren);
-  const cm = Engine.cell(d, col, y, R(), stored(siren, y, col), TODAY);
+  if (value === 'fait' && !UI.me) { askWho(() => setStatus(id, col, y, value)); return; }
+  const d = getD(id), cm = Engine.cell(d, col, y, R(), stored(d, y, col), TODAY);
   let v = null;
   if (value === 'fait') v = { s: 'fait', at: new Date().toISOString(), by: UI.me, due: cm.due ? Engine.ymd(cm.due) : null };
   if (value === 'nc') v = { s: 'nc', at: new Date().toISOString(), by: UI.me || null };
-  await guarded(() => Store.merge('statuts', stKey(siren, y), { cells: { [col]: v } }, { siren, annee: y, cells: {} }));
-  if (value === 'fait') toast('Marqué « Fait »');
+  if (await guarded(() => Store.merge('dossiers', id, { statuts: { [y]: { [col]: v } } })) && value === 'fait') toast('Marqué « Fait »');
 }
 
 function closePop() { const p = document.querySelector('.pop'); if (p) p.remove(); }
-function openCellPop(btn) {
+function openCellPop(btn, cm) {
   closePop();
-  const { siren, col } = btn.dataset, y = UI.year;
-  const d = Store.data.dossiers.get(siren), c = Engine.COL[col];
-  const cm = Engine.cell(d, col, y, R(), stored(siren, y, col), TODAY);
+  const { id } = btn.dataset, d = getD(id), c = Engine.COL[cm.ref.col], y = cm.ref.y;
   const pop = document.createElement('div'); pop.className = 'pop'; pop.setAttribute('role', 'dialog');
   let info = '';
-  if (cm.status === 'fait') info = `Fait le ${fmt(new Date(cm.at))}${cm.by ? ' par ' + esc(collabName(cm.by)) : ''}.${cm.kept ? ' Conservé : le profil actuel ne génère plus cette échéance.' : ''}`;
-  else if (cm.manual) info = 'Marqué « Non concerné » à la main.';
+  if (cm.status === 'fait') info = `Fait${cm.at ? ' le ' + fmt(new Date(cm.at)) : ''}${cm.by && cm.by !== 'import' ? ' par ' + esc(collabName(cm.by)) : cm.by === 'import' ? ' (repris du tableau Excel)' : ''}.${cm.kept ? ' Conservé : le profil actuel ne génère plus cette échéance.' : ''}`;
+  else if (cm.manual) info = 'Marqué « Non concerné ».';
+  if (cm.note) info += ` Mention : « ${esc(cm.note)} ».`;
   info += cm.due ? ` Échéance : ${fmt(cm.due)}.` : '';
-  if (/^TVA-[MT]/.test(col) && cm.applicable) { const t = Engine.tvaDay(d, R()); info += ` Dépôt le ${t.jour} du mois (${esc(t.why)})${cm.due.getDate() !== t.jour ? ', reporté au jour ouvré suivant' : ''}.`; }
-  const b = (v, t, cls = '') => `<button class="btn ${cls}" data-act="set" data-siren="${siren}" data-col="${col}" data-y="${y}" data-v="${v}">${t}</button>`;
-  pop.innerHTML = `<h4>${esc(d.nom)}</h4><p>${esc(c.grp)} · ${esc(c.label)} · ${y}<br>${info}</p><div class="acts">
+  if (/^TVA-[MT]/.test(c.id) && cm.applicable) { const t = Engine.tvaDay(d, R()); info += ` Dépôt le ${t.jour} du mois (${esc(t.why)})${cm.due.getDate() !== t.jour ? ', reporté au jour ouvré suivant' : ''}.`; }
+  const b = (v, t, cls = '') => `<button class="btn ${cls}" data-act="set" data-id="${esc(id)}" data-col="${c.id}" data-y="${y}" data-v="${v}">${t}</button>`;
+  pop.innerHTML = `<h4>${esc(d.nom)}</h4><p>${esc(c.label)} · période ${y}<br>${info}</p><div class="acts">
     ${cm.status !== 'fait' ? b('fait', 'Marquer fait', 'primary') : ''}
     ${cm.status !== 'afaire' && cm.applicable ? b('', 'Remettre à faire') : ''}
     ${cm.status === 'fait' && !cm.applicable ? b('', 'Annuler') : ''}
     ${cm.status !== 'nc' ? b('nc', 'Non concerné') : ''}</div>`;
   document.body.appendChild(pop);
   const r = btn.getBoundingClientRect();
-  const left = Math.min(Math.max(16, r.left), window.innerWidth - pop.offsetWidth - 16);
-  const top = r.bottom + pop.offsetHeight + 8 > window.innerHeight ? r.top - pop.offsetHeight - 6 : r.bottom + 6;
-  pop.style.left = left + 'px'; pop.style.top = Math.max(8, top) + 'px';
+  pop.style.left = Math.min(Math.max(16, r.left), window.innerWidth - pop.offsetWidth - 16) + 'px';
+  pop.style.top = Math.max(8, r.bottom + pop.offsetHeight + 8 > window.innerHeight ? r.top - pop.offsetHeight - 6 : r.bottom + 6) + 'px';
 }
 
 function modal(html, onReady) {
   $('#layer').innerHTML = `<div class="scrim" data-act="close-modal"><div class="modal" role="dialog" aria-modal="true">${html}</div></div>`;
-  const first = $('#layer').querySelector('input, select, button.primary');
-  if (first) first.focus();
+  const first = $('#layer').querySelector('input, select, button.primary'); if (first) first.focus();
   if (onReady) onReady($('#layer .modal'));
 }
 const closeModal = () => { $('#layer').innerHTML = ''; };
 
 function askWho(then) {
-  modal(`<h2>Qui êtes-vous ?</h2><p class="lead">Votre nom est enregistré avec chaque échéance marquée « Fait ».</p>
-    <div class="seg">${collabs().map(c => `<label><input type="radio" name="who" value="${c.id}"> ${esc(c.nom)}</label>`).join('')}</div>
+  modal(`<h2>Qui êtes-vous ?</h2><p class="lead">Vos initiales sont enregistrées avec chaque échéance marquée « Fait ».</p>
+    <select id="who-sel" style="width:100%">${collabs().map(c => `<option value="${esc(c.code || c.id)}">${esc(c.nom)}${c.code && c.nom !== c.code ? ' (' + esc(c.code) + ')' : ''}</option>`).join('')}</select>
     <div class="foot"><button class="btn" data-act="close-modal-btn">Annuler</button><button class="btn primary" id="who-ok">Continuer</button></div>`, m => {
-    m.querySelector('#who-ok').onclick = () => {
-      const v = m.querySelector('input[name=who]:checked');
-      if (!v) return;
-      UI.me = v.value; lsSet('echeancier.me', UI.me); closeModal(); render(); then && then();
-    };
+    m.querySelector('#who-ok').onclick = () => { UI.me = m.querySelector('#who-sel').value; lsSet('echeancier.me', UI.me); closeModal(); render(); then && then(); };
   });
 }
 
-function openDossier(siren) {
-  const d = siren ? Store.data.dossiers.get(siren) : { nom: '', siren: '', collab: UI.me || '', tva: '', impot: '', cloture: '12-31', autres: [] };
+function openDossier(id) {
+  const d = id ? getD(id) : { nom: '', num: '', siren: '', collab: UI.me || '', collabTVA: '', tva: '', impot: '', cloture: '12-31', autres: [] };
   const [cm, cd] = (d.cloture || '12-31').split('-');
   const radios = (name, list, val) => `<div class="seg">${list.map(x => `<label><input type="radio" name="${name}" value="${x.id}" ${val === x.id ? 'checked' : ''}> ${x.label}</label>`).join('')}</div>`;
-  modal(`<h2>${siren ? esc(d.nom) : 'Nouveau dossier'}</h2>
+  const cOpts = (val, empty) => `<option value="">${empty}</option>` + collabs().map(c => `<option value="${esc(c.code || c.id)}" ${(c.code || c.id) === val ? 'selected' : ''}>${esc(c.nom)}</option>`).join('');
+  modal(`<h2>${id ? esc(d.nom) : 'Nouveau dossier'}</h2>
     <form class="form" id="dossier-form" novalidate>
-      <div><label class="lbl" for="d-nom">Nom du client</label><input type="text" id="d-nom" value="${esc(d.nom)}" required></div>
+      <div><label class="lbl" for="d-nom">Nom du dossier</label><input type="text" id="d-nom" value="${esc(d.nom)}" required></div>
       <div class="row2">
-        <div><label class="lbl" for="d-siren">SIREN</label><input type="text" id="d-siren" class="mono" inputmode="numeric" value="${esc(d.siren)}" ${siren ? 'disabled' : ''} placeholder="9 chiffres"></div>
-        <div><label class="lbl" for="d-collab">Collaborateur responsable</label><select id="d-collab" style="width:100%"><option value="">—</option>${collabs().map(c => `<option value="${c.id}" ${c.id === d.collab ? 'selected' : ''}>${esc(c.nom)}</option>`).join('')}</select></div>
+        <div><label class="lbl" for="d-num">N° de dossier (Agility)</label><input type="text" id="d-num" class="mono" value="${esc(d.num || '')}" ${id ? 'disabled' : ''}></div>
+        <div><label class="lbl" for="d-siren">SIREN (facultatif)</label><input type="text" id="d-siren" class="mono" inputmode="numeric" value="${esc(d.siren || '')}" placeholder="9 chiffres"></div>
+      </div>
+      <div class="row2">
+        <div><label class="lbl" for="d-collab">Collaborateur</label><select id="d-collab" style="width:100%">${cOpts(d.collab, '—')}</select></div>
+        <div><label class="lbl" for="d-collabtva">Collaborateur TVA</label><select id="d-collabtva" style="width:100%">${cOpts(d.collabTVA, 'Le même')}</select>
+          ${d.tvaNote ? `<span style="font-size:12px;color:var(--muted)">Tableau d’origine : « ${esc(d.tvaNote)} »</span>` : ''}</div>
       </div>
       <div><span class="lbl">TVA</span>${radios('tva', TVA_REGIMES, d.tva)}</div>
       <div class="row2">
-        <div><label class="lbl" for="d-forme">Forme juridique</label><select id="d-forme" style="width:100%"><option value="">Non renseignée</option>${FORMES.map(f => `<option value="${f.id}" ${d.forme === f.id ? 'selected' : ''}>${f.label}</option>`).join('')}</select>
+        <div><label class="lbl" for="d-forme">Forme juridique${d.formeLabel ? ` (tableau : ${esc(d.formeLabel)})` : ''}</label><select id="d-forme" style="width:100%"><option value="">Non renseignée</option>${FORMES.map(f => `<option value="${f.id}" ${d.forme === f.id ? 'selected' : ''}>${f.label}</option>`).join('')}</select>
           <label style="display:flex;gap:6px;align-items:center;margin-top:6px;font-size:13px"><input type="checkbox" id="d-idf" ${d.idf ? 'checked' : ''}> Siège à Paris ou en 92, 93, 94</label></div>
         <div><label class="lbl" for="d-jour">Jour de dépôt TVA forcé</label><input type="number" id="d-jour" class="mono" min="1" max="31" value="${d.jourTVA || ''}" placeholder="auto : le ${Engine.tvaDay(d, R()).jour}" style="width:100%">
-          <span style="font-size:12px;color:var(--muted)">Facultatif : le jour indiqué dans l’espace professionnel du client. Il prime sur la grille.</span></div>
+          <span style="font-size:12px;color:var(--muted)">Facultatif : le jour indiqué dans l’espace professionnel du client.</span></div>
       </div>
       <div class="row2">
         <div><span class="lbl">Impôt</span>${radios('impot', IMPOTS, d.impot)}</div>
         <div><span class="lbl">Clôture de l'exercice</span><div style="display:flex;gap:6px">
-          <select id="d-cd" aria-label="Jour de clôture">${Array.from({ length: 31 }, (_, i) => i + 1).map(i => `<option ${i === Number(cd) ? 'selected' : ''}>${String(i).padStart(2, '0')}</option>`).join('')}</select>
-          <select id="d-cm" aria-label="Mois de clôture">${MONTHS_LONG.map((m, i) => `<option value="${String(i + 1).padStart(2, '0')}" ${i + 1 === Number(cm) ? 'selected' : ''}>${m}</option>`).join('')}</select></div></div>
+          <select id="d-cd" aria-label="Jour de clôture">${Array.from({ length: 31 }, (_, i) => i + 1).map(i => `<option ${i === Number(cd) ? 'selected' : ''}>${pad(i)}</option>`).join('')}</select>
+          <select id="d-cm" aria-label="Mois de clôture">${MONTHS_LONG.map((m, i) => `<option value="${pad(i + 1)}" ${i + 1 === Number(cm) ? 'selected' : ''}>${m}</option>`).join('')}</select></div></div>
       </div>
       <div><span class="lbl">Autres obligations</span><div class="seg">${AUTRES.map(a => `<label><input type="checkbox" name="autres" value="${a.id}" ${(d.autres || []).includes(a.id) ? 'checked' : ''}> ${a.label}</label>`).join('')}</div></div>
       <p class="err" id="d-err"></p>
     </form>
-    <div class="foot">${siren ? `<button class="btn danger" data-act="dossier-del" data-siren="${siren}">Supprimer le dossier</button>` : ''}
+    <div class="foot">${id ? `<button class="btn danger" data-act="dossier-del" data-id="${esc(id)}">Supprimer le dossier</button>` : ''}
       <button class="btn" data-act="close-modal-btn">Annuler</button><button class="btn primary" id="d-save" ${Store.canWrite ? '' : 'disabled'}>Enregistrer</button></div>`, m => {
-    m.querySelector('#d-save').onclick = () => saveDossier(siren, m);
+    m.querySelector('#d-save').onclick = () => saveDossier(id, m);
   });
 }
 
-async function saveDossier(siren, m) {
+async function saveDossier(id, m) {
   const val = s => m.querySelector(s);
-  const nom = val('#d-nom').value.trim();
-  const sr = siren || val('#d-siren').value.replace(/\D/g, '');
-  const tva = (m.querySelector('input[name=tva]:checked') || {}).value || '';
-  const impot = (m.querySelector('input[name=impot]:checked') || {}).value || '';
+  const nom = val('#d-nom').value.trim(), num = (id ? getD(id).num : val('#d-num').value.trim()) || '';
+  const siren = val('#d-siren').value.replace(/\D/g, '');
+  const tva = (m.querySelector('input[name=tva]:checked') || {}).value || '', impot = (m.querySelector('input[name=impot]:checked') || {}).value || '';
   const err = [];
-  if (!nom) err.push('le nom du client');
-  if (sr.length !== 9) err.push('un SIREN à 9 chiffres');
+  if (!nom) err.push('le nom du dossier');
+  if (!id && !num && siren.length !== 9) err.push('un n° de dossier ou un SIREN à 9 chiffres');
+  if (siren && siren.length !== 9) err.push('un SIREN à 9 chiffres (ou laissez vide)');
   if (!tva) err.push('le régime de TVA');
   if (!impot) err.push("l'impôt (IS ou IR)");
-  if (!siren && Store.data.dossiers.has(sr)) { val('#d-err').textContent = `Le SIREN ${sr} existe déjà (${Store.data.dossiers.get(sr).nom}).`; return; }
+  const newId = id || (num ? 'a' + num : 's' + siren);
+  if (!id && Store.data.dossiers.has(newId)) { val('#d-err').textContent = `Ce dossier existe déjà (${Store.data.dossiers.get(newId).nom}).`; return; }
   if (err.length) { val('#d-err').textContent = 'Indiquez ' + err.join(', ') + '.'; return; }
-  const body = {
-    nom, siren: sr, collab: val('#d-collab').value, tva, impot,
-    cloture: `${val('#d-cm').value}-${val('#d-cd').value}`,
-    autres: [...m.querySelectorAll('input[name=autres]:checked')].map(i => i.value),
-    forme: val('#d-forme').value, idf: val('#d-idf').checked,
-    jourTVA: Number(val('#d-jour').value) >= 1 && Number(val('#d-jour').value) <= 31 ? Number(val('#d-jour').value) : '',
-  };
-  await guarded(() => Store.set('dossiers', sr, body));
-  closeModal(); toast(siren ? 'Dossier mis à jour, échéances recalculées' : 'Dossier créé');
+  const j = Number(val('#d-jour').value);
+  const patch = { nom, num, siren, collab: val('#d-collab').value, collabTVA: val('#d-collabtva').value, tva, impot,
+    cloture: `${val('#d-cm').value}-${val('#d-cd').value}`, autres: [...m.querySelectorAll('input[name=autres]:checked')].map(i => i.value),
+    forme: val('#d-forme').value, idf: val('#d-idf').checked, jourTVA: j >= 1 && j <= 31 ? j : '' };
+  if (await guarded(() => Store.merge('dossiers', newId, patch, { statuts: {} }))) { closeModal(); toast(id ? 'Dossier mis à jour, échéances recalculées' : 'Dossier créé'); }
 }
 
 function confirmDelete(btn) {
-  if (btn.dataset.armed) {
-    const siren = btn.dataset.siren;
-    guarded(async () => {
-      await Store.del('dossiers', siren);
-      for (const k of Store.data.statuts.keys()) if (k.startsWith(siren + '_')) await Store.del('statuts', k);
-    });
-    closeModal(); toast('Dossier supprimé');
-  } else { btn.dataset.armed = '1'; btn.textContent = 'Confirmer la suppression'; }
+  if (btn.dataset.armed) { guarded(() => Store.del('dossiers', btn.dataset.id)); closeModal(); toast('Dossier supprimé'); }
+  else { btn.dataset.armed = '1'; btn.textContent = 'Confirmer la suppression'; }
 }
 
-const slug = s => 'c-' + s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
-async function ensureCollab(name) {
-  if (!name) return '';
-  const hit = collabs().find(c => c.nom.toLowerCase() === name.toLowerCase());
-  if (hit) return hit.id;
-  let id = slug(name) || 'c-' + Date.now().toString(36);
-  if (Store.data.collaborateurs.has(id)) id += '-' + Date.now().toString(36).slice(-4);
-  await Store.set('collaborateurs', id, { nom: name });
-  return id;
+async function ensureCollab(code, nom) {
+  const id = collabId(code);
+  if (!Store.data.collaborateurs.has(id)) await Store.set('collaborateurs', id, { code, nom: nom || code });
+  return code;
+}
+
+/** Écrit beaucoup de documents avec une barre de progression (6 envois en parallèle). */
+async function writeMany(items, label) {
+  modal(`<h2>${esc(label)}</h2><p class="lead" id="wm-txt">0 / ${items.length}</p><div class="progress-bar"><i id="wm-bar"></i></div><p class="lead" style="font-size:12.5px">Gardez cette page ouverte jusqu’à la fin.</p>`);
+  let done = 0, i = 0, failed = 0;
+  async function worker() {
+    while (i < items.length) {
+      const it = items[i++];
+      for (let attempt = 0; attempt < 4; attempt++) {
+        try { await it(); break; }
+        catch (e) { if (e && e.code === 'invalid_argument') throw e; if (attempt === 3) failed++; else await new Promise(r => setTimeout(r, 800 * (attempt + 1))); }
+      }
+      done++; const t = $('#wm-txt'), b = $('#wm-bar'); if (t) t.textContent = `${done} / ${items.length}`; if (b) b.style.width = (100 * done / items.length) + '%';
+    }
+  }
+  await Promise.all(Array.from({ length: 6 }, worker));
+  return failed;
 }
 
 async function importFile(file) {
-  if (!window.XLSX) { toast("Le module Excel n'a pas pu se charger. Vérifiez la connexion puis rechargez."); return; }
-  let rows;
-  try {
-    const wb = XLSX.read(await file.arrayBuffer(), { type: 'array' });
-    rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: false, defval: '' });
-  } catch (e) { toast('Ce fichier ne peut pas être lu. Enregistrez-le en .xlsx ou .csv puis réessayez.'); return; }
-  const plan = Engine.planImport(rows, Store.data.dossiers);
-  if (plan.error) { toast(plan.error); return; }
-  await guarded(async () => {
-    for (const r of [...plan.creates, ...plan.updates]) {
-      const collab = await ensureCollab(r.collabName);
-      if (Store.data.dossiers.has(r.siren)) {
-        const patch = { nom: r.nom }; if (collab) patch.collab = collab;
-        await Store.merge('dossiers', r.siren, patch);
-      } else {
-        await Store.set('dossiers', r.siren, { nom: r.nom, siren: r.siren, collab, tva: '', impot: '', cloture: '12-31', autres: [] });
-      }
-    }
-  });
-  modal(`<h2>Import terminé</h2><ul class="tests">
-    <li class="ok"><b>${plan.creates.length}</b> dossier${plan.creates.length > 1 ? 's' : ''} créé${plan.creates.length > 1 ? 's' : ''}<small>Leur profil fiscal est à compléter.</small></li>
-    <li><b>${plan.updates.length}</b> dossier${plan.updates.length > 1 ? 's' : ''} déjà connu${plan.updates.length > 1 ? 's' : ''}, mis à jour<small>Reconnus par leur SIREN : nom et collaborateur actualisés, profil et statuts conservés.</small></li>
-    ${plan.skipped ? `<li class="ko"><b>${plan.skipped}</b> ligne${plan.skipped > 1 ? 's' : ''} ignorée${plan.skipped > 1 ? 's' : ''}<small>SIREN absent ou différent de 9 chiffres.</small></li>` : ''}
-  </ul><div class="foot"><button class="btn primary" data-act="close-modal-btn">Fermer</button></div>`);
+  if (!window.XLSX) { toast("Le module Excel n'a pas pu se charger. Rechargez la page."); return; }
+  let aoa;
+  try { const wb = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true }); aoa = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: null }); }
+  catch (e) { toast('Ce fichier ne peut pas être lu. Enregistrez-le en .xlsx puis réessayez.'); return; }
+  if (!Store.canWrite) { toast('Lecture seule : import impossible.'); return; }
+  const existing = new Map(dossiers().map(d => [d.id, d]));
+  if (Importer.isSuivi(aoa)) {
+    const res = Importer.fromSuivi(aoa, R(), existing);
+    if (res.error) { toast(res.error); return; }
+    const created = [...res.dossiers.keys()].filter(k => !existing.has(k)).length, updated = res.dossiers.size - created;
+    const ops = [...res.stats.collabs].map(code => () => ensureCollab(code));
+    for (const [id, d] of res.dossiers) ops.push(() => Store.set('dossiers', id, d));
+    if (res.campagneMois && res.campagneMois !== R().campagne.mois) ops.push(() => Store.set('regles', 'campagne', { mois: res.campagneMois }));
+    const failed = await writeMany(ops, `Import de ${res.dossiers.size} dossiers`).catch(() => -1);
+    UI.year = res.campaign.Y; lsSet('echeancier.campagne', UI.year);
+    modal(`<h2>Import terminé</h2><ul class="tests">
+      <li class="ok"><b>${created}</b> dossier(s) créé(s), <b>${updated}</b> mis à jour<small>Reconnus par le n° Agility : un réimport ne crée pas de doublon. Les « Fait » saisis dans l’appli sont conservés.</small></li>
+      <li><b>${res.stats.collabs.size}</b> collaborateurs (initiales)<small>Remplacez les initiales par les noms dans l’onglet Dossiers si vous le souhaitez.</small></li>
+      <li><b>Campagne ${esc(res.campaign.label)}</b><small>Cases vides = à faire ; « NON » = non concerné ; une date = fait ; une mention (Client, DATA, Déficit…) = non concerné, avec la mention affichée.</small></li>
+      ${res.stats.nonPlacees ? `<li class="ko"><b>${res.stats.nonPlacees}</b> date(s) non placée(s)<small>Souvent un dossier au profil incomplet (IS ou IR non renseigné) : complétez sa fiche puis réimportez le fichier.</small></li>` : ''}
+      ${failed > 0 ? `<li class="ko"><b>${failed}</b> envoi(s) en échec<small>Relancez l’import : il complètera sans doublon.</small></li>` : failed < 0 ? `<li class="ko"><b>Import interrompu</b><small>Votre accès ne permet pas d’écrire.</small></li>` : ''}
+    </ul><div class="foot"><button class="btn primary" data-act="close-modal-btn">Fermer</button></div>`);
+    return;
+  }
+  const res = Importer.fromList(aoa);
+  if (res.error) { toast(res.error); return; }
+  let created = 0, updated = 0;
+  const ops = [];
+  for (const [id, r] of res.list) {
+    if (existing.has(id)) { updated++; ops.push(async () => { if (r.collab) await ensureCollab(r.collab); await Store.merge('dossiers', id, { nom: r.nom, ...(r.collab ? { collab: r.collab } : {}) }); }); }
+    else { created++; ops.push(async () => { if (r.collab) await ensureCollab(r.collab); await Store.set('dossiers', id, { nom: r.nom, num: r.num, siren: r.siren, collab: r.collab, collabTVA: '', tva: '', impot: '', cloture: '12-31', autres: [], statuts: {} }); }); }
+  }
+  await writeMany(ops, `Import de ${res.list.size} dossiers`).catch(() => {});
+  modal(`<h2>Import terminé</h2><ul class="tests"><li class="ok"><b>${created}</b> dossier(s) créé(s)<small>Leur profil fiscal est à compléter.</small></li>
+    <li><b>${updated}</b> dossier(s) déjà connu(s), mis à jour</li>${res.skipped ? `<li class="ko"><b>${res.skipped}</b> ligne(s) sans SIREN ni n° de dossier ignorée(s)</li>` : ''}</ul>
+    <div class="foot"><button class="btn primary" data-act="close-modal-btn">Fermer</button></div>`);
 }
 
-/** Tableau d'export construit à partir de la même vue que l'écran. */
+/** Export : mêmes lignes, colonnes et libellés que l'écran (filtres compris, toutes les lignes). */
 function exportRows() {
   const v = computeView();
-  const head = ['Dossier', 'SIREN', 'Collaborateur', ...v.cols.map(c => `${c.grp} - ${c.label}`)];
-  const aoa = [head];
-  const detail = [['Dossier', 'SIREN', 'Collaborateur', 'Obligation', 'Échéance', 'Statut', 'Fait le', 'Par']];
+  const head = ['Dossier', 'N° dossier', 'Collaborateur', 'Collaborateur TVA', ...v.cols.map(c => `${c.grp} - ${c.label}${c.slot === 'TVA' ? '' : ' ' + c.month}`)];
+  const aoa = [head], detail = [['Dossier', 'N° dossier', 'Responsable', 'Obligation', 'Période', 'Échéance', 'Statut', 'Fait le', 'Par']];
   for (const d of v.rows) {
-    const line = [d.nom, d.siren, collabName(d.collab)];
+    const line = [d.nom, d.num || d.siren || '', d.collab || '', d.collabTVA || d.tvaNote || ''];
     for (const c of v.cols) {
-      const cm = v.cells.get(d.siren + '|' + c.id);
-      const lbl = Engine.statusLabel(cm);
+      const cm = v.cells.get(d.id + '|' + c.key) || NCELL, lbl = Engine.statusLabel(cm);
       line.push(cm.due && cm.status !== 'nc' ? `${lbl} (${fmt(cm.due)})` : lbl);
-      if (cm.status !== 'nc' || cm.manual) detail.push([d.nom, d.siren, collabName(d.collab), `${c.grp} - ${c.label}`, cm.due ? fmt(cm.due) : '', lbl, cm.at ? fmt(new Date(cm.at)) : '', cm.by ? collabName(cm.by) : '']);
+      if (cm.ref && (cm.status !== 'nc' || cm.manual)) detail.push([d.nom, d.num || '', resp(d, cm.ref.col) || '', Engine.COL[cm.ref.col].label, cm.ref.y, cm.due ? fmt(cm.due) : '', lbl, cm.at ? fmt(new Date(cm.at)) : '', cm.by && cm.by !== 'import' ? cm.by : '']);
     }
     aoa.push(line);
   }
@@ -992,96 +1204,75 @@ function exportRows() {
 }
 async function exportExcel() {
   if (!window.XLSX) { toast("Le module Excel n'a pas pu se charger. Rechargez la page."); return; }
-  const { aoa, detail } = exportRows();
-  const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols'] = aoa[0].map((_, i) => ({ wch: i === 0 ? 30 : i < 3 ? 14 : 20 }));
-  ws['!freeze'] = { xSplit: 1, ySplit: 1 };
-  XLSX.utils.book_append_sheet(wb, ws, `Tableau ${UI.year}`);
+  const { aoa, detail, v } = exportRows();
+  const wb = XLSX.utils.book_new(), ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = aoa[0].map((_, i) => ({ wch: i === 0 ? 30 : i < 4 ? 12 : 18 }));
+  XLSX.utils.book_append_sheet(wb, ws, 'Tableau');
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(detail), 'Détail');
   const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-  const filename = `echeances-${UI.year}-${Engine.ymd(TODAY)}.xlsx`;
+  const filename = `echeances-campagne-${v.camp.Y}-${Engine.ymd(TODAY)}.xlsx`;
   let downloads = null;
   try { downloads = window.claude && window.claude.use ? await window.claude.use('downloads') : null; } catch (e) {}
-  if (downloads) {
-    try { await downloads.save({ filename, data: buf }); toast('Export prêt'); }
-    catch (e) { if (e.code !== 'declined') toast("L'export n'a pas pu être enregistré."); }
-  } else {
-    XLSX.writeFile(wb, filename);
-  }
+  if (downloads) { try { await downloads.save({ filename, data: buf }); toast('Export prêt'); } catch (e) { if (e.code !== 'declined') toast("L'export n'a pas pu être enregistré."); } }
+  else XLSX.writeFile(wb, filename);
 }
 
 /* ==========================================================================
-   Vérifications automatiques (critères de recette)
+   Vérifications (critères de recette + import du tableau)
    ========================================================================== */
 function runChecks() {
-  const out = [];
-  const t = (name, ok, detail) => out.push({ name, ok, detail });
-  const Rd = Engine.rules({});
-  const y = 2026, today = new Date(2026, 9, 17);
-  const base = { nom: 'Test', siren: '000000001', impot: 'IS', cloture: '12-31', autres: [] };
-  const count = (d, type, R = Rd, st = {}) => Engine.COLS.filter(c => c.type === type)
-    .map(c => Engine.cell(d, c.id, y, R, st[c.id], today)).filter(cm => cm.status !== 'nc').length;
-
-  const nM = count({ ...base, tva: 'mensuelle' }, 'TVA'), nT = count({ ...base, tva: 'trimestrielle' }, 'TVA');
-  const nA = count({ ...base, tva: 'annuelle' }, 'TVA'), nA0 = count({ ...base, tva: 'annuelle' }, 'TVA', Engine.rules({ ca12: { nb: 0 } }));
-  t('TVA : mensuelle 12, trimestrielle 4, CA12 1 + acomptes', nM === 12 && nT === 4 && nA === 3 && nA0 === 1,
-    `mensuelle ${nM} · trimestrielle ${nT} · CA12 avec 2 acomptes ${nA} · CA12 sans acompte ${nA0}`);
-
-  const non = { ...base, tva: 'non' };
-  const tvaCells = Engine.COLS.filter(c => c.type === 'TVA').map(c => Engine.cell(non, c.id, y, Rd, undefined, today));
-  t('Non assujetti : aucune case TVA à faire', tvaCells.every(cm => cm.status === 'nc'), `${tvaCells.length} cases TVA, toutes « Non concerné »`);
-
-  const ds = c => ['IS-A1', 'IS-A2', 'IS-A3', 'IS-A4', 'IS-SOLDE', 'IS-LIASSE'].map(id => fmt(Engine.cell({ ...base, tva: 'non', cloture: c }, id, y, Rd, undefined, today).due));
-  const d1 = ds('12-31'), d2 = ds('06-30');
-  t('Clôture 31/12 → 30/06 : acomptes et liasse recalculés', d1.every((v, i) => v !== d2[i]),
-    `31/12 : ${d1.join(', ')}<br>30/06 : ${d2.join(', ')}`);
-
-  const st = { 'TVA-M01': { s: 'fait', at: '2026-02-18T09:00:00Z', by: 'x', due: '2026-02-19' }, 'TVA-M02': { s: 'fait', at: '2026-03-18T09:00:00Z', by: 'x', due: '2026-03-19' } };
-  const q = { ...base, tva: 'trimestrielle' };
-  const kept = ['TVA-M01', 'TVA-M02'].every(id => Engine.cell(q, id, y, Rd, st[id], today).status === 'fait');
-  const gone = Engine.cell(q, 'TVA-M11', y, Rd, undefined, today).status === 'nc';
-  const newQ = Engine.cell(q, 'TVA-T4', y, Rd, undefined, today).status === 'afaire';
-  t('Mensuelle → trimestrielle : « Fait » conservés, futur recalculé', kept && gone && newQ,
-    `janv. et févr. restent « Fait » : ${kept ? 'oui' : 'non'} · nov. mensuelle disparaît : ${gone ? 'oui' : 'non'} · T4 créé : ${newQ ? 'oui' : 'non'}`);
-
-  const lateCell = Engine.cell({ ...base, tva: 'mensuelle' }, 'TVA-M03', y, Rd, undefined, today);
-  const soonCell = Engine.cell({ ...base, tva: 'mensuelle' }, 'TVA-M09', y, Rd, undefined, new Date(2026, 9, 14));
-  t('Échéance dépassée et non faite → en retard (rouge)', lateCell.late && Engine.statusLabel(lateCell) === 'En retard' && soonCell.soon,
-    `TVA mars (échéance ${fmt(lateCell.due)}) : ${Engine.statusLabel(lateCell)} · TVA sept. vue le 14/10 : dans les 7 jours`);
-
-  // export = écran : on compare la grille affichée aux lignes exportées
+  const out = [], t = (name, ok, detail) => out.push({ name, ok, detail });
+  const Rd = Engine.rules({}), today = new Date(2026, 9, 17), camp = Engine.campaign(2026, Rd);
+  const base = { nom: 'Test', id: 'x', impot: 'IS', cloture: '12-31', autres: [], statuts: {} };
+  const tvaCount = d => Object.entries(Engine.refsFor(d, camp, Rd)).filter(([k, r]) => Engine.COL[r.col].type === 'TVA')
+    .map(([k, r]) => Engine.cell(d, r.col, r.y, Rd, Engine.stOf(d, r.y, r.col), today)).filter(cm => cm.status !== 'nc').length;
+  const nM = tvaCount({ ...base, tva: 'mensuelle' }), nT = tvaCount({ ...base, tva: 'trimestrielle' }), nA = tvaCount({ ...base, tva: 'annuelle' });
+  t('TVA : mensuelle 12, trimestrielle 4, CA12 1 + acomptes', nM === 12 && nT === 4 && nA === 3, `campagne ${camp.label} · mensuelle ${nM} · trimestrielle ${nT} · CA12 + 2 acomptes ${nA}`);
+  t('Non assujetti : aucune case TVA à faire', tvaCount({ ...base, tva: 'non' }) === 0, '0 case TVA à faire');
+  const dueOf = c => ['IS-A1', 'IS-A2', 'IS-A3', 'IS-A4', 'IS-SOLDE', 'IS-LIASSE'].map(id => fmt(Engine.cell({ ...base, tva: 'non', cloture: c }, id, 2026, Rd, undefined, today).due));
+  const d1 = dueOf('12-31'), d2 = dueOf('06-30');
+  t('Clôture 31/12 → 30/06 : acomptes et liasse recalculés', d1.every((v, i) => v !== d2[i]), `31/12 : ${d1.join(', ')}<br>30/06 : ${d2.join(', ')}`);
+  const q = { ...base, tva: 'trimestrielle', statuts: { 2026: { 'TVA-M09': { s: 'fait', at: '2026-10-15T09:00:00Z', by: 'x' }, 'TVA-M10': { s: 'fait', at: '2026-11-15T09:00:00Z', by: 'x' } } } };
+  const rq = Engine.refsFor(q, camp, Rd);
+  const kept = ['TVA@2026-09', 'TVA@2026-10'].every(k => Engine.cell(q, rq[k].col, rq[k].y, Rd, Engine.stOf(q, rq[k].y, rq[k].col), today).status === 'fait');
+  const nov = Engine.cell(q, rq['TVA@2026-11'].col, rq['TVA@2026-11'].y, Rd, undefined, today).status === 'nc', t4 = rq['TVA@2026-12'].col === 'TVA-T4';
+  t('Mensuelle → trimestrielle : « Fait » conservés, futur recalculé', kept && nov && t4, `sept. et oct. restent « Fait » : ${kept ? 'oui' : 'non'} · nov. devient non concerné : ${nov ? 'oui' : 'non'} · déc. = T4 : ${t4 ? 'oui' : 'non'}`);
+  const lateCell = Engine.cell({ ...base, tva: 'mensuelle' }, 'TVA-M08', 2026, Rd, undefined, new Date(2026, 9, 1));
+  t('Échéance dépassée et non faite → en retard (rouge)', lateCell.late && Engine.statusLabel(lateCell) === 'En retard', `TVA d’août (échéance ${fmt(lateCell.due)}) vue le 01/10 : ${Engine.statusLabel(lateCell)}`);
   let exportOk = null, exportDetail = 'Ouvrez l’onglet Tableau avec au moins un dossier pour comparer.';
   const grid = document.getElementById('grid');
   if (grid && UI.tab === 'grid') {
-    const { aoa, v } = exportRows();
-    let diff = 0, n = 0;
-    v.rows.forEach((d, i) => v.cols.forEach((c, j) => {
-      const btn = grid.querySelector(`[data-siren="${d.siren}"][data-col="${c.id}"]`);
-      n++; if (!btn || !String(aoa[i + 1][j + 3]).startsWith(btn.dataset.status)) diff++;
-    }));
+    const { aoa, v } = exportRows(); let diff = 0, n = 0;
+    v.rows.slice(0, UI.shown).forEach((d, i) => v.cols.forEach((c, j) => { const btn = grid.querySelector(`[data-id="${CSS.escape(d.id)}"][data-key="${c.key}"]`); n++; if (!btn || !String(aoa[i + 1][j + 4]).startsWith(btn.dataset.status)) diff++; }));
     exportOk = diff === 0; exportDetail = `${n} cases comparées, ${diff} différence(s)`;
   }
   t('Export Excel identique à l’écran', exportOk !== false, exportDetail);
-
-  const rows = [['Client', 'SIREN', 'Collaborateur'], ['Alpha', '123 456 789', 'A'], ['Beta', '98765432100012', 'B'], ['Alpha bis', '123456789', 'A'], ['Sans siren', '', 'A']];
-  const p1 = Engine.planImport(rows, new Map());
-  const existing = new Map(p1.creates.map(r => [r.siren, r]));
-  const p2 = Engine.planImport(rows, existing);
-  t('Réimport du même fichier : aucun doublon', p1.creates.length === 2 && p2.creates.length === 0 && p2.updates.length === 2,
-    `1er import : ${p1.creates.length} créations (doublon interne fusionné, ${p1.skipped} ligne ignorée) · 2e import : ${p2.creates.length} création, ${p2.updates.length} mises à jour`);
+  // Import du tableau de suivi
+  const sample = [
+    [null, null, null, null, null, null, 'IMPOT SUR LES SOCIETES', null, null, 'CFE', null, 'TVA MENSUELLE OU TRIMESTRIELLE', null, null, null, null],
+    [null, 'Collaborateur ', 'Collaborateur TVA', 'Numéro agility', 'Date cloture', 'Forme juridique ', 'IS / IR', 'Acompte IS 09/2026', 'Solde 2572', 'Acompte CFE', 'Solde CFE', null, 'TVA 09/2026', 'TVA 10/2026', 'TVA 11/2026', 'TVA 12/2026'],
+    [' ALPHA', 'TG', 'ED', 1001, new Date(2026, 11, 31), 'SARL', 'IS', new Date(2026, 8, 7), null, 'NON', 'prelevement', 'OUI', new Date(2026, 9, 13), null, null, null],
+    [' BETA', 'MN', null, 1002, 12, 'SCI', 'IR', 'NON', 'NON', 'NON', 'NON', 'NON', 'NON', 'NON', 'NON', 'NON'],
+    [' GAMMA', 'TG', 'Lorient', 1003, new Date(2026, 8, 30), 'SAS', 'IS', 'Déficit', null, 'NON', null, 'OUI', 'CLIENT', 'CLIENT', 'CLIENT', 'CLIENT'],
+  ];
+  const r1 = Importer.fromSuivi(sample, Rd, new Map());
+  const A = r1.dossiers.get('a1001'), B = r1.dossiers.get('a1002'), G = r1.dossiers.get('a1003');
+  const okMap = A && A.tva === 'mensuelle' && A.collabTVA === 'ED' && A.forme === 'SOC' && A.statuts[2026]['TVA-M09'].s === 'fait' && A.statuts[2026]['IS-A3'].s === 'fait' && A.autres.includes('CFE') && !A.autres.includes('CFEAC')
+    && B.tva === 'non' && B.impot === 'IR' && B.cloture === '12-31' && G.cloture === '09-30' && G.tvaNote === 'Lorient' && G.statuts[2026]['TVA-M09'].note === 'CLIENT' && G.statuts[2026]['IS-A4'].note === 'Déficit';
+  t('Import du tableau de suivi : profils et statuts', !!okMap, 'date → Fait · NON → non concerné · CLIENT/Déficit → mention · clôture « 12 » → 31/12 · collaborateur TVA « ED » · « Lorient » gardé comme mention');
+  const r2 = Importer.fromSuivi(sample, Rd, r1.dossiers);
+  const created2 = [...r2.dossiers.keys()].filter(k => !r1.dossiers.has(k)).length;
+  t('Réimport du même fichier : aucun doublon', r1.dossiers.size === 3 && created2 === 0, `1er import : ${r1.dossiers.size} dossiers · 2e import : ${created2} création, ${r2.dossiers.size} mises à jour`);
   const td = x => Engine.tvaDay({ ...base, ...x }, Rd).jour;
-  const cas = [['société, SIREN 82…, siège 75', td({ forme: 'SOC', idf: true, siren: '828665014' }), 21], ['société hors Île-de-France', td({ forme: 'SOC', idf: false }), 21],
-    ['EI « Bernard », hors 75/92/93/94', td({ forme: 'EI', nom: 'Bernard' }), 16], ['EI « Martin », hors 75/92/93/94', td({ forme: 'EI', nom: 'Martin' }), 19],
-    ['SA', td({ forme: 'SA' }), 24], ['jour forcé à 15 sur la fiche', td({ forme: 'SOC', jourTVA: 15 }), 15]];
+  const cas = [['société hors Île-de-France', td({ forme: 'SOC' }), 21], ['EI « Bernard »', td({ forme: 'EI', nom: 'Bernard' }), 16], ['EI « Martin »', td({ forme: 'EI', nom: 'Martin' }), 19], ['SA', td({ forme: 'SA' }), 24], ['jour forcé à 15', td({ forme: 'SOC', jourTVA: 15 }), 15]];
   t('Jour de dépôt TVA selon forme, siège, nom ou SIREN', cas.every(c => c[1] === c[2]), cas.map(c => `${c[0]} : le ${c[1]}`).join(' · '));
-  const sat = Engine.cell({ ...base, tva: 'mensuelle', forme: 'SOC', idf: true, siren: '100000000' }, 'TVA-M08', y, Rd, undefined, today);
+  const sat = Engine.cell({ ...base, tva: 'mensuelle', forme: 'SOC', idf: true, siren: '100000000' }, 'TVA-M08', 2026, Rd, undefined, today);
   t('Échéance un samedi → reportée au lundi', Engine.ymd(sat.due) === '2026-09-21', `TVA d’août (le 19/09/2026 tombe un samedi) → ${fmt(sat.due)}`);
   return out;
 }
 function showChecks() {
   const res = runChecks();
-  modal(`<h2>Vérifications</h2><p class="lead">Contrôle du moteur sur des dossiers de test (période 2026, date du jour fixée au 17/10/2026).</p>
+  modal(`<h2>Vérifications</h2><p class="lead">Contrôle du moteur et de l'import sur des dossiers de test (campagne sept. 2026 → août 2027).</p>
     <ul class="tests">${res.map(r => `<li class="${r.ok ? 'ok' : 'ko'}"><b>${r.ok ? '✔' : '✘'}</b> ${esc(r.name)}<small>${r.detail}</small></li>`).join('')}</ul>
     <div class="foot"><button class="btn primary" data-act="close-modal-btn">Fermer</button></div>`);
 }
@@ -1093,22 +1284,24 @@ document.addEventListener('click', e => {
   const tab = e.target.closest('#tabs button');
   if (tab) { UI.tab = tab.dataset.tab; lsSet('echeancier.tab', UI.tab); closePop(); render(); return; }
   if (!e.target.closest('.pop') && !e.target.closest('[data-act=cell]')) closePop();
-  const el = e.target.closest('[data-act]');
-  if (!el) return;
+  const el = e.target.closest('[data-act]'); if (!el) return;
   const a = el.dataset.act;
   if (a === 'close-modal' && e.target !== el) return;
   switch (a) {
     case 'cell': {
-      const { siren, col } = el.dataset;
-      const cm = Engine.cell(Store.data.dossiers.get(siren), col, UI.year, R(), stored(siren, UI.year, col), TODAY);
-      if (cm.status === 'afaire' && Store.canWrite) setStatus(siren, col, UI.year, 'fait');
-      else if (cm.status !== 'nc' || cm.manual) openCellPop(el);
+      const cm = VIEW && VIEW.cells.get(el.dataset.id + '|' + el.dataset.key);
+      if (!cm || !cm.ref) break;
+      if (cm.status === 'afaire' && Store.canWrite) setStatus(el.dataset.id, cm.ref.col, cm.ref.y, 'fait');
+      else if (cm.status !== 'nc' || cm.manual) openCellPop(el, cm);
       break;
     }
-    case 'set': closePop(); setStatus(el.dataset.siren, el.dataset.col, Number(el.dataset.y), el.dataset.v || null); break;
-    case 'edit': openDossier(el.dataset.siren); break;
+    case 'set': closePop(); setStatus(el.dataset.id, el.dataset.col, Number(el.dataset.y), el.dataset.v || null); break;
+    case 'edit': openDossier(el.dataset.id); break;
     case 'dossier-del': confirmDelete(el); break;
     case 'close-modal': case 'close-modal-btn': closeModal(); break;
+    case 'more': UI.shown += PAGE; render(); break;
+    case 'all': UI.shown = 1e6; render(); break;
+    case 'dmore': UI.dshown += 300; render(); break;
     case 'see-late': UI.tab = 'grid'; UI.f = { ...UI.f, collab: UI.me, late: true, month: '' }; render(); break;
     case 'collab-del': guarded(() => Store.del('collaborateurs', el.dataset.id)); break;
     case 'rule-reset': guarded(() => Store.del('regles', el.dataset.rule)).then(() => toast('Valeurs par défaut rétablies')); break;
@@ -1116,8 +1309,7 @@ document.addEventListener('click', e => {
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { closePop(); closeModal(); } });
 document.addEventListener('submit', async e => {
-  const form = e.target.closest('form[data-rule]');
-  if (!form) return;
+  const form = e.target.closest('form[data-rule]'); if (!form) return;
   e.preventDefault();
   const rule = RULES.find(r => r.id === form.dataset.rule), body = {};
   for (const f of rule.fields) {
@@ -1125,7 +1317,7 @@ document.addEventListener('submit', async e => {
     if (f.type === 'md') {
       const [dd, mm] = raw.split('/').map(n => parseInt(n, 10));
       if (!(dd >= 1 && dd <= 31 && mm >= 1 && mm <= 12)) { toast(`${f.label} : saisissez une date au format JJ/MM.`); return; }
-      body[f.k] = `${String(mm).padStart(2, '0')}-${String(dd).padStart(2, '0')}`;
+      body[f.k] = `${pad(mm)}-${pad(dd)}`;
     } else if (f.type === 'list') {
       const l = raw.split(',').map(s => parseInt(s, 10)).filter(n => n >= 1 && n <= 12);
       if (!l.length) { toast(`${f.label} : indiquez des mois entre 1 et 12, séparés par des virgules.`); return; }
@@ -1133,30 +1325,32 @@ document.addEventListener('submit', async e => {
     } else if (f.type === 'bool') body[f.k] = form.elements[f.k].checked ? 1 : 0;
     else body[f.k] = Number(raw);
   }
-  await guarded(() => Store.set('regles', rule.id, body));
-  toast(`${rule.label} : enregistré, échéances recalculées`);
+  if (await guarded(() => Store.set('regles', rule.id, body))) toast(`${rule.label} : enregistré, échéances recalculées`);
 });
 document.addEventListener('change', e => {
   const t = e.target;
-  if (t.id === 'year') { UI.year = Number(t.value); lsSet('echeancier.year', UI.year); render(); }
+  if (t.id === 'year') { UI.year = Number(t.value); lsSet('echeancier.campagne', UI.year); render(); }
   if (t.id === 'me') { UI.me = t.value; lsSet('echeancier.me', UI.me); render(); }
-  if (t.id === 'f-collab') { UI.f.collab = t.value; render(); }
-  if (t.id === 'f-month') { UI.f.month = t.value; render(); }
+  if (t.id === 'f-collab') { UI.f.collab = t.value; UI.shown = PAGE; render(); }
+  if (t.id === 'f-month') { UI.f.month = t.value; UI.shown = PAGE; render(); }
   if (t.id === 'f-type') { UI.f.type = t.value; render(); }
-  if (t.id === 'f-late') { UI.f.late = t.checked; render(); }
+  if (t.id === 'f-late') { UI.f.late = t.checked; UI.shown = PAGE; render(); }
   if (t.id === 'file-import' && t.files[0]) { const f = t.files[0]; t.value = ''; importFile(f); }
   if (t.dataset.collab) { const v = t.value.trim(); if (v) guarded(() => Store.merge('collaborateurs', t.dataset.collab, { nom: v })); }
 });
 let qTimer;
-$('#f-q').addEventListener('input', e => { clearTimeout(qTimer); qTimer = setTimeout(() => { UI.f.q = e.target.value.trim(); render(); $('#f-q').focus(); }, 200); });
+document.addEventListener('input', e => {
+  if (e.target.id === 'f-q') { clearTimeout(qTimer); qTimer = setTimeout(() => { UI.f.q = e.target.value.trim(); UI.shown = PAGE; render(); const q = $('#f-q'); q.focus(); q.setSelectionRange(q.value.length, q.value.length); }, 250); }
+  if (e.target.id === 'd-q') { clearTimeout(qTimer); qTimer = setTimeout(() => { UI.dq = e.target.value.trim(); UI.dshown = PAGE; render(); const q = $('#d-q'); q.focus(); q.setSelectionRange(q.value.length, q.value.length); }, 250); }
+});
 $('#btn-export').addEventListener('click', exportExcel);
 $('#btn-tests').addEventListener('click', showChecks);
 $('#btn-new').addEventListener('click', () => openDossier(null));
 $('#collab-add').addEventListener('click', async () => {
   const i = $('#collab-new'), v = i.value.trim(); if (!v) return;
-  await guarded(() => ensureCollab(v)); i.value = '';
+  const code = /^[A-Za-z]{1,5}$/.test(v) ? v.toUpperCase() : v.split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 4);
+  if (await guarded(() => ensureCollab(code, v))) i.value = '';
 });
 
-$('#grid-wrap').innerHTML = `<div class="empty">Chargement des dossiers…</div>`;
 Store.init(render);
 </script>
